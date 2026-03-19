@@ -136,9 +136,17 @@ function setupIpcHandlers(): void {
     return gitService.getStatus(opts.cwd);
   });
 
-  // 포트 스캔
-  ipcMain.handle(IPC_CHANNELS.PORT_SCAN, async (_event, opts: { pid?: number }) => {
-    return portScanner.scan(opts.pid);
+  // 터미널 PID 조회 (렌더러에서 포트 스캔용)
+  ipcMain.handle('terminal:pid', (_event, opts: { id: string }) => {
+    return terminalService.getPid(opts.id) || null;
+  });
+
+  // 포트 스캔 (PID 배치 조회)
+  ipcMain.handle(IPC_CHANNELS.PORT_SCAN, async (_event, opts: { pids?: number[] }) => {
+    if (opts.pids && opts.pids.length > 0) {
+      return portScanner.scanByPids(opts.pids);
+    }
+    return {};
   });
 
   // 알림 발송 (Windows Toast)

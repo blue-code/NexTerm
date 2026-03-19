@@ -1102,10 +1102,70 @@ async function pollGitStatus() {
 // 10초마다 Git 상태 갱신
 setInterval(pollGitStatus, 10000);
 
-// ── 포트 스캔 폴링 ──
-// 터미널 PID 기반 자식 프로세스 포트 추적이 필요하며,
-// 현재는 시스템 전체 포트가 표시되어 노이즈가 발생하므로 비활성화.
-// 향후 터미널 PID → 자식 프로세스 트리 → 리스닝 포트 체인 구현 시 활성화.
+// ── 포트 스캔 폴링 (PID → 자식 프로세스 트리 → 리스닝 포트) ──
+
+async function pollPorts() {
+  try {
+    // 각 워크스페이스의 터미널 패널 PID를 수집
+    const pidMap = new Map(); // pid → workspaceId[]
+    const allPids = [];
+
+    for (const ws of state.workspaces) {
+      for (const panel of ws.panels) {
+        if (panel.type === 'terminal') {
+          const pid = await ipcRenderer.invoke('terminal:pid', { id: panel.id });
+          if (pid) {
+            allPids.push(pid);
+            if (!pidMap.has(pid)) pidMap.set(pid, []);
+            pidMap.get(pid).push(ws.id);
+          }
+        }
+      }
+    }
+
+    if (allPids.length === 0) return;
+
+    // 배치 조회: PID → 자식 프로세스 트리 → 리스닝 포트
+    const portsByPid = await ipcRenderer.invoke('port:scan', { pids: allPids });
+    if (!portsByPid) return;
+
+    // 워크스페이스별 포트 집계
+    const portsByWs = new Map();
+    for (const [pidStr, ports] of Object.entries(portsByPid)) {
+      const pid = parseInt(pidStr, 10);
+      const wsIds = pidMap.get(pid) || [];
+      for (const wsId of wsIds) {
+        if (!portsByWs.has(wsId)) portsByWs.set(wsId, new Set());
+        for (const port of ports) {
+          portsByWs.get(wsId).add(port);
+        }
+      }
+    }
+
+    // 워크스페이스 상태 업데이트
+    let changed = false;
+    for (const ws of state.workspaces) {
+      const newPorts = portsByWs.has(ws.id)
+        ? Array.from(portsByWs.get(ws.id)).sort((a, b) => a - b)
+        : [];
+      const oldKey = ws.listeningPorts.join(',');
+      const newKey = newPorts.join(',');
+      if (oldKey !== newKey) {
+        ws.listeningPorts = newPorts;
+        changed = true;
+      }
+    }
+
+    if (changed) renderSidebar();
+  } catch {
+    // 무시
+  }
+}
+
+// 5초마다 포트 스캔
+setInterval(pollPorts, 5000);
+// 초기 로드 후 3초 뒤 첫 스캔
+setTimeout(pollPorts, 3000);
 
 // ── 세션 저장/복원 ──
 
