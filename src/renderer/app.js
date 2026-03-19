@@ -1103,22 +1103,9 @@ async function pollGitStatus() {
 setInterval(pollGitStatus, 10000);
 
 // ── 포트 스캔 폴링 ──
-
-async function pollPorts() {
-  try {
-    const ports = await ipcRenderer.invoke('port:scan', {});
-    // 각 워크스페이스에 포트 할당 (간단 버전: 전체 포트 표시)
-    for (const ws of state.workspaces) {
-      ws.listeningPorts = ports?.slice(0, 5) || [];
-    }
-    renderSidebar();
-  } catch {
-    // 무시
-  }
-}
-
-// 5초마다 포트 스캔
-setInterval(pollPorts, 5000);
+// 터미널 PID 기반 자식 프로세스 포트 추적이 필요하며,
+// 현재는 시스템 전체 포트가 표시되어 노이즈가 발생하므로 비활성화.
+// 향후 터미널 PID → 자식 프로세스 트리 → 리스닝 포트 체인 구현 시 활성화.
 
 // ── 세션 저장/복원 ──
 
