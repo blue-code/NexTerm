@@ -6,9 +6,12 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && electron .",
-    "dev": "tsc && electron .",
+    "dev": "tsc && electron . --dev",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:win": "tsc && electron-builder --win",
+    "dist:mac": "tsc && electron-builder --mac",
+    "dist:all": "tsc && electron-builder --win --mac"
   },
   "author": "",
   "license": "MIT",
@@ -28,14 +31,61 @@
   "build": {
     "appId": "com.nexterm.app",
     "productName": "NexTerm",
-    "win": {
-      "target": "nsis"
+    "copyright": "Copyright © 2026 NexTerm",
+    "directories": {
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "src/renderer/**/*.html",
       "src/renderer/**/*.css",
+      "assets/**/*",
       "node_modules/**/*"
-    ]
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.svg",
+      "artifactName": "NexTerm-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.svg",
+      "uninstallerIcon": "assets/icon.svg",
+      "installerHeaderIcon": "assets/icon.svg",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NexTerm"
+    },
+    "portable": {
+      "artifactName": "NexTerm-${version}-Portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.svg",
+      "artifactName": "NexTerm-${version}.${ext}",
+      "category": "public.app-category.developer-tools"
+    },
+    "dmg": {
+      "title": "NexTerm ${version}",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
   }
 }
