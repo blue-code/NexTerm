@@ -17,10 +17,16 @@ const state = {
   settings: null,
   sidebarWidth: 240,
   sidebarVisible: true,
-  terminalInstances: new Map(), // panelId → { terminal, fitAddon, searchAddon }
+  terminalInstances: new Map(), // panelId → { terminal, fitAddon, searchAddon, container }
   focusedPanelId: null,
   defaultShell: 'powershell.exe',
 };
+
+// 터미널 DOM 컨테이너 풀 — 레이아웃 재렌더 시에도 터미널 DOM을 파괴하지 않고 보존
+const terminalPool = document.createElement('div');
+terminalPool.id = 'terminal-pool';
+terminalPool.style.display = 'none';
+document.addEventListener('DOMContentLoaded', () => document.body.appendChild(terminalPool));
 
 // ── 유틸리티 ──
 
@@ -53,6 +59,7 @@ function createWorkspace(name, cwd) {
     createdAt: Date.now(),
   };
   state.workspaces.push(workspace);
+  state.focusedPanelId = panelId;
   selectWorkspace(id);
   renderSidebar();
   return workspace;
@@ -223,7 +230,16 @@ function openBrowserPanel(url) {
 
 // ── 터미널 관리 ──
 
-function createTerminalInstance(panelId, container, cwd) {
+function createTerminalInstance(panelId, cwd) {
+  // 이미 존재하면 재생성하지 않음
+  if (state.terminalInstances.has(panelId)) return state.terminalInstances.get(panelId);
+
+  // 전용 컨테이너 생성 (풀에 보관, 레이아웃 변경 시 이동만)
+  const container = document.createElement('div');
+  container.className = 'terminal-container';
+  container.dataset.termPanelId = panelId;
+  terminalPool.appendChild(container);
+
   const terminal = new Terminal({
     fontFamily: state.settings?.fontFamily || 'Cascadia Code, Consolas, monospace',
     fontSize: state.settings?.fontSize || 14,
@@ -272,7 +288,28 @@ function createTerminalInstance(panelId, container, cwd) {
     // WebGL 미지원 시 Canvas 폴백 (기본)
   }
 
-  fitAddon.fit();
+  // 앱 단축키를 xterm보다 먼저 처리 — false 반환 시 xterm이 해당 키를 무시
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true;
+    const ctrl = e.ctrlKey;
+    const shift = e.shiftKey;
+    const key = e.key;
+    // 앱 단축키 목록: xterm에 전달하지 않고 document 핸들러에서 처리
+    if (ctrl && shift && key === 'P') return false;
+    if (ctrl && !shift && key === 'n') return false;
+    if (ctrl && !shift && key === 'w') return false;
+    if (ctrl && shift && key === 'W') return false;
+    if (ctrl && !shift && key === 'd') return false;
+    if (ctrl && shift && key === 'D') return false;
+    if (ctrl && !shift && key === 'b') return false;
+    if (ctrl && shift && key === 'B') return false;
+    if (ctrl && !shift && key === 'f') return false;
+    if (ctrl && key === 'Tab') return false;
+    if (ctrl && key === ']') return false;
+    if (ctrl && key === '[') return false;
+    if (ctrl && shift && key === 'U') return false;
+    return true; // 나머지는 xterm에 전달
+  });
 
   // 메인 프로세스에 터미널 생성 요청
   ipcRenderer.invoke('terminal:create', {
@@ -291,14 +328,16 @@ function createTerminalInstance(panelId, container, cwd) {
     ipcRenderer.send('terminal:resize', { id: panelId, cols, rows });
   });
 
-  state.terminalInstances.set(panelId, { terminal, fitAddon, searchAddon });
-  return { terminal, fitAddon, searchAddon };
+  const inst = { terminal, fitAddon, searchAddon, container };
+  state.terminalInstances.set(panelId, inst);
+  return inst;
 }
 
 function destroyTerminal(panelId) {
   const instance = state.terminalInstances.get(panelId);
   if (instance) {
     instance.terminal.dispose();
+    instance.container.remove();
     state.terminalInstances.delete(panelId);
     ipcRenderer.send('terminal:close', { id: panelId });
   }
@@ -380,6 +419,11 @@ function renderSidebar() {
 function renderWorkspaceContent() {
   const container = document.getElementById('workspace-content');
   if (!container) return;
+
+  // 기존 터미널 컨테이너를 풀로 회수 (DOM에서 제거하지 않고 이동만)
+  container.querySelectorAll('.terminal-container').forEach(tc => {
+    terminalPool.appendChild(tc);
+  });
   container.innerHTML = '';
 
   const ws = getActiveWorkspace();
@@ -388,20 +432,21 @@ function renderWorkspaceContent() {
     return;
   }
 
-  // 기존 터미널 인스턴스 정리 (현재 워크스페이스에 없는 것들)
-  const currentPanelIds = new Set(ws.panels.map(p => p.id));
-
   // 분할 레이아웃 렌더링
   const element = renderSplitNode(ws.splitLayout, ws);
   container.appendChild(element);
 
-  // 터미널 fit 업데이트
+  // 터미널 생성 + 컨테이너 배치 + fit (DOM이 확정된 후 처리)
   requestAnimationFrame(() => {
     for (const panel of ws.panels) {
       if (panel.type === 'terminal') {
-        const instance = state.terminalInstances.get(panel.id);
-        if (instance) {
-          instance.fitAddon.fit();
+        // 인스턴스가 없으면 생성
+        const inst = createTerminalInstance(panel.id, panel.cwd);
+        // 해당 패널의 마운트 포인트에 컨테이너 이동
+        const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
+        if (mount && inst.container) {
+          mount.appendChild(inst.container);
+          inst.fitAddon.fit();
         }
       }
     }
@@ -510,22 +555,13 @@ function renderPanel(panel) {
 
   // 패널 콘텐츠
   if (panel.type === 'terminal') {
-    const termContainer = document.createElement('div');
-    termContainer.className = 'terminal-container';
-    pane.appendChild(termContainer);
-
-    // 터미널 인스턴스가 없으면 생성
-    requestAnimationFrame(() => {
-      if (!state.terminalInstances.has(panel.id)) {
-        createTerminalInstance(panel.id, termContainer, panel.cwd);
-      } else {
-        // 기존 인스턴스 재연결
-        const inst = state.terminalInstances.get(panel.id);
-        termContainer.innerHTML = '';
-        inst.terminal.open(termContainer);
-        inst.fitAddon.fit();
-      }
-    });
+    // 마운트 포인트만 생성 — 실제 터미널 컨테이너는 renderWorkspaceContent에서 이동
+    const mount = document.createElement('div');
+    mount.className = 'term-mount';
+    mount.dataset.panelId = panel.id;
+    mount.style.width = '100%';
+    mount.style.height = 'calc(100% - 28px)';
+    pane.appendChild(mount);
   } else if (panel.type === 'browser') {
     const browserPanel = document.createElement('div');
     browserPanel.className = 'browser-panel';
