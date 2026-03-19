@@ -1,5 +1,11 @@
 import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import * as path from 'path';
+
+// 프로덕션/개발 환경 경로 해결
+// 개발: __dirname = <project>/dist/main/
+// 프로덕션: __dirname = <app>/resources/app.asar/dist/main/
+const isDev = !app.isPackaged;
+const appRoot = path.join(__dirname, '../..');
 import { TerminalService } from './services/terminal-service';
 import { GitService } from './services/git-service';
 import { PortScannerService } from './services/port-scanner-service';
@@ -66,10 +72,10 @@ function createWindow(): void {
       // 브라우저 패널용 webview 허용
       webviewTag: true,
     },
-    icon: path.join(__dirname, '../../assets/icon.png'),
+    icon: path.join(appRoot, 'assets/icon.png'),
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../../src/renderer/index.html'));
+  mainWindow.loadFile(path.join(appRoot, 'src/renderer/index.html'));
 
   // 개발 모드에서 DevTools 열기
   if (process.argv.includes('--dev')) {
@@ -156,7 +162,7 @@ function setupIpcHandlers(): void {
       const toast = new Notification({
         title: notif.title,
         body: notif.body,
-        icon: path.join(__dirname, '../../assets/icon.png'),
+        icon: path.join(appRoot, 'assets/icon.png'),
       });
       toast.on('click', () => {
         mainWindow?.show();

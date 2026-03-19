@@ -37,10 +37,12 @@
     },
     "files": [
       "dist/**/*",
-      "src/renderer/**/*.html",
-      "src/renderer/**/*.css",
+      "src/renderer/**/*",
       "assets/**/*",
       "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
     ],
     "win": {
       "target": [
