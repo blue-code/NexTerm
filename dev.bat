@@ -1,43 +1,39 @@
 @echo off
-chcp 65001 >nul 2>&1
-title NexTerm - 개발 모드
+title NexTerm - Dev Mode
 echo.
-echo  ╔══════════════════════════════════════╗
-echo  ║   NexTerm - 개발 모드 실행           ║
-echo  ╚══════════════════════════════════════╝
+echo  ========================================
+echo    NexTerm - Dev Mode
+echo  ========================================
 echo.
 
-:: 의존성 확인
 if not exist "node_modules" (
-    echo [1/3] 의존성 설치 중...
+    echo [1/3] Installing dependencies...
     call npm install
     if errorlevel 1 (
-        echo [오류] npm install 실패
+        echo [ERROR] npm install failed
         pause
         exit /b 1
     )
     echo.
 ) else (
-    echo [1/3] 의존성 확인 완료
+    echo [1/3] Dependencies OK
 )
 
-:: TypeScript 빌드
-echo [2/3] TypeScript 빌드 중...
+echo [2/3] Building TypeScript...
 call npx tsc
 if errorlevel 1 (
-    echo [오류] TypeScript 빌드 실패
+    echo [ERROR] TypeScript build failed
     pause
     exit /b 1
 )
 
-:: Electron 실행 (DevTools 활성)
-echo [3/3] NexTerm 실행 중... (DevTools 활성)
+echo [3/3] Starting NexTerm (DevTools ON)
 echo.
-echo  단축키:
-echo    Ctrl+Shift+P  커맨드 팔레트
-echo    Ctrl+N        새 워크스페이스
-echo    Ctrl+D        수평 분할
-echo    Ctrl+Shift+D  수직 분할
-echo    Ctrl+B        사이드바 토글
+echo  Shortcuts:
+echo    Ctrl+Shift+P  Command Palette
+echo    Ctrl+N        New Workspace
+echo    Ctrl+D        Split Horizontal
+echo    Ctrl+Shift+D  Split Vertical
+echo    Ctrl+B        Toggle Sidebar
 echo.
 call npx electron . --dev
