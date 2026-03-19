@@ -1153,6 +1153,65 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * 시스템에 설치된 폰트만 select에 남기기
+ * Canvas 렌더링 비교 방식으로 폰트 존재 여부를 판별한다.
+ */
+function filterAvailableFonts(selectEl) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const testStr = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const fallback = 'serif';
+  const size = '48px';
+
+  ctx.font = `${size} ${fallback}`;
+  const fallbackWidth = ctx.measureText(testStr).width;
+
+  const options = Array.from(selectEl.options);
+  for (const opt of options) {
+    const fontName = opt.value;
+    ctx.font = `${size} "${fontName}", ${fallback}`;
+    const testWidth = ctx.measureText(testStr).width;
+    // 폭이 다르면 해당 폰트가 설치되어 있다고 판단
+    if (testWidth === fallbackWidth) {
+      // 추가 검증: monospace 폴백과도 비교
+      ctx.font = `${size} "${fontName}", monospace`;
+      const monoWidth = ctx.measureText(testStr).width;
+      ctx.font = `${size} monospace`;
+      const defaultMonoWidth = ctx.measureText(testStr).width;
+      if (monoWidth === defaultMonoWidth) {
+        opt.disabled = true;
+        opt.textContent = opt.textContent + ' (not installed)';
+        opt.style.color = '#565f89';
+      }
+    }
+  }
+}
+
+/** 모든 활성 터미널에 폰트 변경 반영 */
+function applyFontToAllTerminals(fontFamily) {
+  for (const [, inst] of state.terminalInstances) {
+    try {
+      inst.terminal.options.fontFamily = fontFamily;
+      inst.fitAddon.fit();
+    } catch {
+      // 무시
+    }
+  }
+}
+
+/** 모든 활성 터미널에 폰트 크기 변경 반영 */
+function applyFontSizeToAllTerminals(fontSize) {
+  for (const [, inst] of state.terminalInstances) {
+    try {
+      inst.terminal.options.fontSize = fontSize;
+      inst.fitAddon.fit();
+    } catch {
+      // 무시
+    }
+  }
+}
+
 function fitAllTerminals() {
   for (const [, inst] of state.terminalInstances) {
     try {
@@ -1176,6 +1235,56 @@ async function init() {
     state.settings = await ipcRenderer.invoke('settings:get');
   } catch {
     state.settings = {};
+  }
+
+  // 폰트 설정 — 시스템에 설치된 폰트만 표시 + 실시간 프리뷰
+  const fontSelect = document.getElementById('setting-font');
+  const fontPreview = document.getElementById('font-preview');
+  if (fontSelect) {
+    // 시스템에 설치된 폰트만 필터링
+    filterAvailableFonts(fontSelect);
+
+    // 현재 설정값 반영
+    if (state.settings?.fontFamily) {
+      const primary = state.settings.fontFamily.split(',')[0].trim();
+      fontSelect.value = primary;
+    }
+
+    // 프리뷰 초기화
+    if (fontPreview) {
+      fontPreview.style.fontFamily = `"${fontSelect.value}", monospace`;
+    }
+
+    // 폰트 변경 시 프리뷰 + 전체 터미널 반영
+    fontSelect.addEventListener('change', () => {
+      const selected = fontSelect.value;
+      if (fontPreview) {
+        fontPreview.style.fontFamily = `"${selected}", monospace`;
+      }
+      // 설정 저장
+      const fontFamily = `${selected}, monospace`;
+      if (!state.settings) state.settings = {};
+      state.settings.fontFamily = fontFamily;
+      ipcRenderer.invoke('settings:set', { fontFamily });
+      // 모든 터미널에 폰트 반영
+      applyFontToAllTerminals(fontFamily);
+    });
+  }
+
+  // 폰트 크기 변경
+  const fontSizeInput = document.getElementById('setting-font-size');
+  if (fontSizeInput) {
+    fontSizeInput.value = state.settings?.fontSize || 14;
+    fontSizeInput.addEventListener('change', () => {
+      const size = parseInt(fontSizeInput.value, 10);
+      if (size >= 8 && size <= 32) {
+        if (!state.settings) state.settings = {};
+        state.settings.fontSize = size;
+        ipcRenderer.invoke('settings:set', { fontSize: size });
+        applyFontSizeToAllTerminals(size);
+        if (fontPreview) fontPreview.style.fontSize = size + 'px';
+      }
+    });
   }
 
   // 셸 설정 적용
