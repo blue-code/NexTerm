@@ -33,7 +33,44 @@
         <button id="btn-notifications" class="icon-btn" title="알림">
           🔔 <span id="notification-badge" class="badge hidden">0</span>
         </button>
+        <button id="btn-shortcuts" class="icon-btn" title="단축키">⌨</button>
         <button id="btn-settings" class="icon-btn" title="설정">⚙</button>
+      </div>
+    </div>
+
+    <!-- 단축키 팝업 -->
+    <div id="shortcuts-dialog" class="hidden">
+      <div class="dialog-backdrop"></div>
+      <div class="dialog-container shortcuts-container">
+        <div class="dialog-header">
+          <h2>Keyboard Shortcuts</h2>
+          <button id="btn-close-shortcuts" class="icon-btn">✕</button>
+        </div>
+        <div class="dialog-body shortcuts-body">
+          <div class="shortcut-section">
+            <h3>Workspace</h3>
+            <div class="shortcut-row"><span>New workspace</span><kbd>Ctrl+N</kbd></div>
+            <div class="shortcut-row"><span>Close workspace</span><kbd>Ctrl+Shift+W</kbd></div>
+            <div class="shortcut-row"><span>Next workspace</span><kbd>Ctrl+Tab</kbd></div>
+            <div class="shortcut-row"><span>Prev workspace</span><kbd>Ctrl+Shift+Tab</kbd></div>
+          </div>
+          <div class="shortcut-section">
+            <h3>Panel</h3>
+            <div class="shortcut-row"><span>Split horizontal</span><kbd>Ctrl+D</kbd></div>
+            <div class="shortcut-row"><span>Split vertical</span><kbd>Ctrl+Shift+D</kbd></div>
+            <div class="shortcut-row"><span>Close panel</span><kbd>Ctrl+W</kbd></div>
+            <div class="shortcut-row"><span>Next panel</span><kbd>Ctrl+]</kbd></div>
+            <div class="shortcut-row"><span>Prev panel</span><kbd>Ctrl+[</kbd></div>
+          </div>
+          <div class="shortcut-section">
+            <h3>Tools</h3>
+            <div class="shortcut-row"><span>Command palette</span><kbd>Ctrl+Shift+P</kbd></div>
+            <div class="shortcut-row"><span>Toggle sidebar</span><kbd>Ctrl+B</kbd></div>
+            <div class="shortcut-row"><span>Open browser</span><kbd>Ctrl+Shift+B</kbd></div>
+            <div class="shortcut-row"><span>Terminal search</span><kbd>Ctrl+F</kbd></div>
+            <div class="shortcut-row"><span>Notifications</span><kbd>Ctrl+Shift+U</kbd></div>
+          </div>
+        </div>
       </div>
     </div>
 

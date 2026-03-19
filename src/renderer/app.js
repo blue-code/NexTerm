@@ -1068,14 +1068,22 @@ document.getElementById('btn-close')?.addEventListener('click', () => {
 
 document.getElementById('btn-new-workspace')?.addEventListener('click', () => createWorkspace());
 document.getElementById('btn-notifications')?.addEventListener('click', toggleNotifications);
+document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
+  document.getElementById('shortcuts-dialog').classList.toggle('hidden');
+});
+document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => {
+  document.getElementById('shortcuts-dialog').classList.add('hidden');
+});
+document.querySelector('#shortcuts-dialog .dialog-backdrop')?.addEventListener('click', () => {
+  document.getElementById('shortcuts-dialog').classList.add('hidden');
+});
+
 document.getElementById('btn-settings')?.addEventListener('click', () => {
   document.getElementById('settings-dialog').classList.toggle('hidden');
 });
 document.getElementById('btn-close-settings')?.addEventListener('click', () => {
   document.getElementById('settings-dialog').classList.add('hidden');
 });
-
-// 설정 다이얼로그 배경 클릭
 document.querySelector('#settings-dialog .dialog-backdrop')?.addEventListener('click', () => {
   document.getElementById('settings-dialog').classList.add('hidden');
 });
