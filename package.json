@@ -53,15 +53,17 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.svg",
-      "artifactName": "NexTerm-${version}-Setup.${ext}"
+      "icon": "assets/icon.png",
+      "artifactName": "NexTerm-${version}-Setup.${ext}",
+      "signDlls": false,
+      "sign": null
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/icon.svg",
-      "uninstallerIcon": "assets/icon.svg",
-      "installerHeaderIcon": "assets/icon.svg",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "NexTerm"
@@ -76,7 +78,7 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "icon": "assets/icon.svg",
+      "icon": "assets/icon.png",
       "artifactName": "NexTerm-${version}.${ext}",
       "category": "public.app-category.developer-tools"
     },

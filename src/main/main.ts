@@ -66,7 +66,7 @@ function createWindow(): void {
       // 브라우저 패널용 webview 허용
       webviewTag: true,
     },
-    icon: path.join(__dirname, '../../assets/icon.svg'),
+    icon: path.join(__dirname, '../../assets/icon.png'),
   });
 
   mainWindow.loadFile(path.join(__dirname, '../../src/renderer/index.html'));
@@ -156,7 +156,7 @@ function setupIpcHandlers(): void {
       const toast = new Notification({
         title: notif.title,
         body: notif.body,
-        icon: path.join(__dirname, '../../assets/icon.svg'),
+        icon: path.join(__dirname, '../../assets/icon.png'),
       });
       toast.on('click', () => {
         mainWindow?.show();

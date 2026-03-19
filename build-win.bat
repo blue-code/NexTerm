@@ -36,6 +36,7 @@ if errorlevel 1 (
 echo [3/4] Packaging for Windows (NSIS + Portable)...
 echo        This may take several minutes.
 echo.
+set CSC_IDENTITY_AUTO_DISCOVERY=false
 call npx electron-builder --win
 if errorlevel 1 (
     echo.
