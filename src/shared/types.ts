@@ -1,0 +1,147 @@
+// 전체 앱에서 공유하는 타입 정의
+
+export interface WorkspaceState {
+  id: string;
+  name: string;
+  panels: PanelState[];
+  splitLayout: SplitNode;
+  activePanelId: string | null;
+  cwd: string;
+  gitBranch?: string;
+  gitDirty?: boolean;
+  prNumber?: number;
+  listeningPorts: number[];
+  unreadNotifications: number;
+  createdAt: number;
+}
+
+export type PanelType = 'terminal' | 'browser' | 'markdown';
+
+export interface PanelState {
+  id: string;
+  type: PanelType;
+  title: string;
+  // 터미널 패널용
+  cwd?: string;
+  scrollback?: string;
+  // 브라우저 패널용
+  url?: string;
+  // 마크다운 패널용
+  filePath?: string;
+}
+
+// 분할 레이아웃 트리 구조 (Bonsplit 대응)
+export type SplitNode = SplitBranch | SplitLeaf;
+
+export interface SplitBranch {
+  type: 'branch';
+  direction: 'horizontal' | 'vertical';
+  ratio: number; // 0~1, 첫 번째 자식의 비율
+  children: [SplitNode, SplitNode];
+}
+
+export interface SplitLeaf {
+  type: 'leaf';
+  panelId: string;
+}
+
+export interface AppNotification {
+  id: string;
+  workspaceId: string;
+  panelId: string;
+  title: string;
+  body: string;
+  timestamp: number;
+  read: boolean;
+}
+
+export interface SessionSnapshot {
+  version: 1;
+  windowBounds: { x: number; y: number; width: number; height: number };
+  workspaces: WorkspaceState[];
+  activeWorkspaceId: string | null;
+  sidebarWidth: number;
+  sidebarVisible: boolean;
+  savedAt: number;
+}
+
+export interface KeyBinding {
+  id: string;
+  label: string;
+  keys: string; // 예: 'Ctrl+Shift+D'
+  action: string;
+}
+
+export interface AppSettings {
+  fontFamily: string;
+  fontSize: number;
+  scrollbackLimit: number;
+  theme: 'dark' | 'light' | 'system';
+  sidebarWidth: number;
+  unfocusedPanelOpacity: number;
+  notificationSound: boolean;
+  sessionRestoreEnabled: boolean;
+  socketControlMode: 'off' | 'nextermOnly' | 'allowAll';
+}
+
+// IPC 메시지 타입
+export interface IpcRequest {
+  id: string;
+  method: string;
+  params: Record<string, unknown>;
+}
+
+export interface IpcResponse {
+  id: string;
+  result?: unknown;
+  error?: string;
+}
+
+// 메인 ↔ 렌더러 IPC 채널
+export const IPC_CHANNELS = {
+  // 터미널
+  TERMINAL_CREATE: 'terminal:create',
+  TERMINAL_DATA: 'terminal:data',
+  TERMINAL_INPUT: 'terminal:input',
+  TERMINAL_RESIZE: 'terminal:resize',
+  TERMINAL_CLOSE: 'terminal:close',
+  TERMINAL_CWD: 'terminal:cwd',
+
+  // 워크스페이스
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_CLOSE: 'workspace:close',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_SELECT: 'workspace:select',
+
+  // 패널
+  PANEL_SPLIT: 'panel:split',
+  PANEL_CLOSE: 'panel:close',
+  PANEL_FOCUS: 'panel:focus',
+
+  // 브라우저
+  BROWSER_OPEN: 'browser:open',
+  BROWSER_NAVIGATE: 'browser:navigate',
+
+  // 알림
+  NOTIFICATION_SEND: 'notification:send',
+  NOTIFICATION_READ: 'notification:read',
+  NOTIFICATION_LIST: 'notification:list',
+
+  // Git
+  GIT_STATUS: 'git:status',
+
+  // 포트
+  PORT_SCAN: 'port:scan',
+
+  // 설정
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SET: 'settings:set',
+
+  // 세션
+  SESSION_SAVE: 'session:save',
+  SESSION_RESTORE: 'session:restore',
+
+  // 앱
+  APP_READY: 'app:ready',
+} as const;

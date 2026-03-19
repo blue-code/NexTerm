@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="24" fill="#1a1b26"/>
+  <rect x="16" y="16" width="42" height="42" rx="6" fill="#7aa2f7" opacity="0.9"/>
+  <rect x="66" y="16" width="46" height="42" rx="6" fill="#9ece6a" opacity="0.7"/>
+  <rect x="16" y="66" width="96" height="46" rx="6" fill="#bb9af7" opacity="0.6"/>
+  <text x="64" y="95" text-anchor="middle" font-family="monospace" font-size="16" font-weight="bold" fill="#c0caf5">NexTerm</text>
+</svg>
