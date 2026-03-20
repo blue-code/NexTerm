@@ -7,6 +7,7 @@ import { filterAvailableFonts } from './utils';
 import { applyTheme, applyBackgroundImage } from './themes';
 import {
   fitAllTerminals,
+  fitAllTerminalsImmediate,
   applyFontToAllTerminals,
   applyFontSizeToAllTerminals,
   initTerminalIpcListeners,
@@ -35,7 +36,8 @@ function toggleSidebar(): void {
   const handle = document.getElementById('sidebar-resize-handle');
   sidebar?.classList.toggle('hidden', !state.sidebarVisible);
   handle?.classList.toggle('hidden', !state.sidebarVisible);
-  setTimeout(() => fitAllTerminals(), 100);
+  // 사이드바 CSS 전환 완료 후 fit (디바운스 적용)
+  setTimeout(() => fitAllTerminals(), 150);
 }
 
 setToggleSidebar(toggleSidebar);
@@ -220,12 +222,15 @@ function initUIEvents(): void {
         const width = Math.max(180, Math.min(400, e.clientX));
         if (sidebar) sidebar.style.width = width + 'px';
         state.sidebarWidth = width;
+        // 드래그 중에는 디바운스된 fit (50ms 내 중복 무시)
         fitAllTerminals();
       };
 
       const onUp = () => {
         isDragging = false;
         sidebarHandle.classList.remove('dragging');
+        // 드래그 종료 시 즉시 fit
+        fitAllTerminalsImmediate();
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
       };

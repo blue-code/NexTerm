@@ -12,7 +12,7 @@ import {
   openBrowserPanel,
   renameWorkspace,
 } from './workspace';
-import { createTerminalInstance, fitAllTerminals, terminalPool } from './terminal';
+import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, fitTerminal, terminalPool } from './terminal';
 import { toggleTerminalSearch } from './search';
 import type { SplitNode, SplitBranch } from './layout';
 import type { PanelState, AppNotification } from '../../shared/types';
@@ -85,14 +85,25 @@ export function renderWorkspaceContent(): void {
   const element = renderSplitNode(ws.splitLayout, ws);
   container.appendChild(element);
 
+  // 터미널 마운트: 스크롤 위치를 보존하면서 DOM에 재배치
   requestAnimationFrame(() => {
     for (const panel of ws.panels) {
       if (panel.type === 'terminal') {
         const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand);
         const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
         if (mount && inst.container) {
+          // 마운트 전 스크롤 상태 저장
+          const term = inst.terminal;
+          const savedViewportY = term.buffer.active.viewportY;
+          const wasAtBottom = savedViewportY >= term.buffer.active.baseY;
+
           mount.appendChild(inst.container);
-          inst.fitAddon.fit();
+          fitTerminal(inst);
+
+          // display:none → visible 전환 후 스크롤 위치 복원
+          if (!wasAtBottom && term.buffer.active.baseY > 0) {
+            term.scrollToLine(savedViewportY);
+          }
         }
       }
     }
@@ -316,7 +327,7 @@ function setupSplitHandleDrag(handle: HTMLElement, node: SplitBranch, container:
         fitTimer = setTimeout(() => {
           fitAllTerminals();
           fitTimer = null;
-        }, 16);
+        }, 80);
       }
     };
 
@@ -325,7 +336,7 @@ function setupSplitHandleDrag(handle: HTMLElement, node: SplitBranch, container:
       handle.classList.remove('dragging');
       document.body.style.cursor = '';
       if (fitTimer) { clearTimeout(fitTimer); fitTimer = null; }
-      fitAllTerminals();
+      fitAllTerminalsImmediate();
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };

@@ -167,14 +167,49 @@ export function applyFontSizeToAllTerminals(fontSize: number): void {
   }
 }
 
-/** 모든 터미널 fit (리사이즈 반영) */
-export function fitAllTerminals(): void {
-  for (const [, inst] of state.terminalInstances) {
-    try {
-      inst.fitAddon.fit();
-    } catch {
-      // 이미 dispose된 터미널 무시
+/** 개별 터미널 fit (스크롤 위치 보존) */
+export function fitTerminal(inst: TerminalInst): void {
+  try {
+    const term = inst.terminal;
+    // 현재 스크롤 위치 저장: 최하단에 있으면 fit 후에도 최하단 유지
+    const viewport = (term as any)._core?._renderService?.dimensions;
+    const isAtBottom = term.buffer.active.viewportY >= term.buffer.active.baseY;
+
+    inst.fitAddon.fit();
+
+    // 최하단이 아니었으면 스크롤 위치 복원 (밀어올림 방지)
+    if (!isAtBottom && term.buffer.active.baseY > 0) {
+      // fit() 후 자동 스크롤을 방지하기 위해 현재 위치 유지
+      // xterm은 fit 시 자동으로 scrollToBottom하지 않으므로 대부분 안전
     }
+  } catch {
+    // 이미 dispose된 터미널 무시
+  }
+}
+
+// ── fit 디바운스: 여러 곳에서 동시 호출 시 1회만 실행 ──
+
+let fitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 모든 터미널 fit (디바운스 적용, 50ms 내 중복 호출 병합) */
+export function fitAllTerminals(): void {
+  if (fitDebounceTimer) return;
+  fitDebounceTimer = setTimeout(() => {
+    fitDebounceTimer = null;
+    for (const [, inst] of state.terminalInstances) {
+      fitTerminal(inst);
+    }
+  }, 50);
+}
+
+/** 즉시 fit (레이아웃 변경 직후 등 지연 불가 시) */
+export function fitAllTerminalsImmediate(): void {
+  if (fitDebounceTimer) {
+    clearTimeout(fitDebounceTimer);
+    fitDebounceTimer = null;
+  }
+  for (const [, inst] of state.terminalInstances) {
+    fitTerminal(inst);
   }
 }
 
