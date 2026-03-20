@@ -1,5 +1,14 @@
 /* ── 기본 리셋 & 변수 ── */
 :root {
+  --titlebar-height: 32px;
+  --sidebar-width: 240px;
+  --split-handle-size: 4px;
+  --font-mono: 'Cascadia Code', 'Consolas', 'D2Coding', monospace;
+  --font-ui: 'Segoe UI', 'Malgun Gothic', sans-serif;
+}
+
+/* ── Dark (Tokyo Night) ── */
+[data-theme="dark"], :root {
   --bg-primary: #1a1b26;
   --bg-secondary: #16161e;
   --bg-tertiary: #24283b;
@@ -15,11 +24,120 @@
   --warning: #e0af68;
   --error: #f7768e;
   --notification-ring: #7aa2f7;
-  --titlebar-height: 32px;
-  --sidebar-width: 240px;
-  --split-handle-size: 4px;
-  --font-mono: 'Cascadia Code', 'Consolas', 'D2Coding', monospace;
-  --font-ui: 'Segoe UI', 'Malgun Gothic', sans-serif;
+}
+
+/* ── Light ── */
+[data-theme="light"] {
+  --bg-primary: #f0f0f3;
+  --bg-secondary: #e4e4e9;
+  --bg-tertiary: #d6d6de;
+  --bg-hover: #cbcbd5;
+  --bg-active: #b4b4c4;
+  --text-primary: #1e1e2e;
+  --text-secondary: #6c6c80;
+  --text-muted: #9999aa;
+  --accent: #4a6cf7;
+  --accent-dim: #8ea4f7;
+  --border: #cbcbd5;
+  --success: #40a02b;
+  --warning: #df8e1d;
+  --error: #d20f39;
+  --notification-ring: #4a6cf7;
+}
+
+/* ── Sakura (핑크) ── */
+[data-theme="sakura"] {
+  --bg-primary: #2a1f2e;
+  --bg-secondary: #221a26;
+  --bg-tertiary: #3a2d40;
+  --bg-hover: #44354c;
+  --bg-active: #6b4a7a;
+  --text-primary: #f5d0e6;
+  --text-secondary: #9a7b8e;
+  --text-muted: #6e5466;
+  --accent: #f7a8d0;
+  --accent-dim: #a8607e;
+  --border: #3a2d40;
+  --success: #b8e6a0;
+  --warning: #f0d080;
+  --error: #f77088;
+  --notification-ring: #f7a8d0;
+}
+
+/* ── Monokai ── */
+[data-theme="monokai"] {
+  --bg-primary: #272822;
+  --bg-secondary: #1e1f1a;
+  --bg-tertiary: #3e3d32;
+  --bg-hover: #49483e;
+  --bg-active: #75715e;
+  --text-primary: #f8f8f2;
+  --text-secondary: #75715e;
+  --text-muted: #575842;
+  --accent: #a6e22e;
+  --accent-dim: #6a8e1a;
+  --border: #3e3d32;
+  --success: #a6e22e;
+  --warning: #e6db74;
+  --error: #f92672;
+  --notification-ring: #66d9ef;
+}
+
+/* ── Nord ── */
+[data-theme="nord"] {
+  --bg-primary: #2e3440;
+  --bg-secondary: #272c36;
+  --bg-tertiary: #3b4252;
+  --bg-hover: #434c5e;
+  --bg-active: #4c566a;
+  --text-primary: #eceff4;
+  --text-secondary: #7b88a1;
+  --text-muted: #5b6578;
+  --accent: #88c0d0;
+  --accent-dim: #5e81ac;
+  --border: #3b4252;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --error: #bf616a;
+  --notification-ring: #88c0d0;
+}
+
+/* ── Solarized Dark ── */
+[data-theme="solarized"] {
+  --bg-primary: #002b36;
+  --bg-secondary: #001f27;
+  --bg-tertiary: #073642;
+  --bg-hover: #0a4050;
+  --bg-active: #2aa198;
+  --text-primary: #93a1a1;
+  --text-secondary: #657b83;
+  --text-muted: #586e75;
+  --accent: #268bd2;
+  --accent-dim: #1a5f8a;
+  --border: #073642;
+  --success: #859900;
+  --warning: #b58900;
+  --error: #dc322f;
+  --notification-ring: #268bd2;
+}
+
+/* ── 배경 이미지 오버레이 ── */
+body.has-bg-image::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-image: var(--bg-image);
+  z-index: -1;
+}
+body.has-bg-image {
+  --bg-primary: rgba(26, 27, 38, 0.85);
+  --bg-secondary: rgba(22, 22, 30, 0.9);
+  --bg-tertiary: rgba(36, 40, 59, 0.85);
+}
+body.has-bg-image .terminal-container {
+  background: transparent;
 }
 
 * {

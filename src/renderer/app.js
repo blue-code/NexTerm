@@ -22,6 +22,78 @@ const state = {
   defaultShell: 'powershell.exe',
 };
 
+// ── 테마 정의 ──
+// 각 테마의 xterm 터미널 색상 (UI 색상은 CSS 변수로 처리)
+const TERMINAL_THEMES = {
+  dark: {
+    background: '#1a1b26', foreground: '#c0caf5', cursor: '#c0caf5', selectionBackground: '#33467c',
+    black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
+    blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6',
+    brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68',
+    brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5',
+  },
+  light: {
+    background: '#f0f0f3', foreground: '#1e1e2e', cursor: '#1e1e2e', selectionBackground: '#b4b4c4',
+    black: '#5c5f77', red: '#d20f39', green: '#40a02b', yellow: '#df8e1d',
+    blue: '#4a6cf7', magenta: '#8839ef', cyan: '#179299', white: '#e6e9ef',
+    brightBlack: '#6c6f85', brightRed: '#d20f39', brightGreen: '#40a02b', brightYellow: '#df8e1d',
+    brightBlue: '#4a6cf7', brightMagenta: '#8839ef', brightCyan: '#179299', brightWhite: '#f0f0f3',
+  },
+  sakura: {
+    background: '#2a1f2e', foreground: '#f5d0e6', cursor: '#f7a8d0', selectionBackground: '#6b4a7a',
+    black: '#1a1520', red: '#f77088', green: '#b8e6a0', yellow: '#f0d080',
+    blue: '#a0b8f0', magenta: '#f7a8d0', cyan: '#a0e0e0', white: '#f5d0e6',
+    brightBlack: '#6e5466', brightRed: '#ff8899', brightGreen: '#c8f0b0', brightYellow: '#f8e0a0',
+    brightBlue: '#b0c8ff', brightMagenta: '#ffc0e0', brightCyan: '#b0f0f0', brightWhite: '#fff0f8',
+  },
+  monokai: {
+    background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0', selectionBackground: '#49483e',
+    black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75',
+    blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f8f8f2',
+    brightBlack: '#75715e', brightRed: '#f92672', brightGreen: '#a6e22e', brightYellow: '#f4bf75',
+    brightBlue: '#66d9ef', brightMagenta: '#ae81ff', brightCyan: '#a1efe4', brightWhite: '#f9f8f5',
+  },
+  nord: {
+    background: '#2e3440', foreground: '#eceff4', cursor: '#d8dee9', selectionBackground: '#4c566a',
+    black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b',
+    blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0',
+    brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b',
+    brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4',
+  },
+  solarized: {
+    background: '#002b36', foreground: '#93a1a1', cursor: '#93a1a1', selectionBackground: '#073642',
+    black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900',
+    blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
+    brightBlack: '#586e75', brightRed: '#cb4b16', brightGreen: '#859900', brightYellow: '#b58900',
+    brightBlue: '#268bd2', brightMagenta: '#6c71c4', brightCyan: '#2aa198', brightWhite: '#fdf6e3',
+  },
+};
+
+// 테마 적용 — CSS 변수(UI) + xterm 터미널 색상 동시 전환
+function applyTheme(themeName) {
+  document.documentElement.setAttribute('data-theme', themeName);
+  const termTheme = TERMINAL_THEMES[themeName] || TERMINAL_THEMES.dark;
+  // 모든 터미널 인스턴스에 테마 적용
+  for (const [, inst] of state.terminalInstances) {
+    inst.terminal.options.theme = termTheme;
+  }
+}
+
+// 배경 이미지 적용
+function applyBackgroundImage(imagePath) {
+  if (imagePath) {
+    // 로컬 파일 경로를 CSS url()로 변환
+    const cssUrl = imagePath.startsWith('http')
+      ? imagePath
+      : `file:///${imagePath.replace(/\\/g, '/')}`;
+    document.body.style.setProperty('--bg-image', `url("${cssUrl}")`);
+    document.body.classList.add('has-bg-image');
+  } else {
+    document.body.classList.remove('has-bg-image');
+    document.body.style.removeProperty('--bg-image');
+  }
+}
+
 // 터미널 DOM 컨테이너 풀 — 레이아웃 재렌더 시에도 터미널 DOM을 파괴하지 않고 보존
 const terminalPool = document.createElement('div');
 terminalPool.id = 'terminal-pool';
@@ -242,34 +314,14 @@ function createTerminalInstance(panelId, cwd) {
   container.dataset.termPanelId = panelId;
   terminalPool.appendChild(container);
 
+  const currentThemeName = state.settings?.theme || 'dark';
   const terminal = new Terminal({
     fontFamily: state.settings?.fontFamily || 'Cascadia Code, Consolas, monospace',
     fontSize: state.settings?.fontSize || 14,
     scrollback: state.settings?.scrollbackLimit || 10000,
     cursorBlink: true,
     cursorStyle: 'bar',
-    theme: {
-      background: '#1a1b26',
-      foreground: '#c0caf5',
-      cursor: '#c0caf5',
-      selectionBackground: '#33467c',
-      black: '#15161e',
-      red: '#f7768e',
-      green: '#9ece6a',
-      yellow: '#e0af68',
-      blue: '#7aa2f7',
-      magenta: '#bb9af7',
-      cyan: '#7dcfff',
-      white: '#a9b1d6',
-      brightBlack: '#414868',
-      brightRed: '#f7768e',
-      brightGreen: '#9ece6a',
-      brightYellow: '#e0af68',
-      brightBlue: '#7aa2f7',
-      brightMagenta: '#bb9af7',
-      brightCyan: '#7dcfff',
-      brightWhite: '#c0caf5',
-    },
+    theme: TERMINAL_THEMES[currentThemeName] || TERMINAL_THEMES.dark,
     allowProposedApi: true,
   });
 
@@ -1435,6 +1487,46 @@ async function init() {
         ipcRenderer.invoke('settings:set', { fontSize: size });
         applyFontSizeToAllTerminals(size);
         if (fontPreview) fontPreview.style.fontSize = size + 'px';
+      }
+    });
+  }
+
+  // 테마 설정 적용
+  const themeSelect = document.getElementById('setting-theme');
+  if (themeSelect) {
+    themeSelect.value = state.settings?.theme || 'dark';
+    applyTheme(themeSelect.value);
+    themeSelect.addEventListener('change', () => {
+      const theme = themeSelect.value;
+      if (!state.settings) state.settings = {};
+      state.settings.theme = theme;
+      ipcRenderer.invoke('settings:set', { theme });
+      applyTheme(theme);
+    });
+  }
+
+  // 배경 이미지 설정
+  const bgImageInput = document.getElementById('setting-bg-image');
+  const bgImageBrowse = document.getElementById('btn-bg-image-browse');
+  if (bgImageInput) {
+    bgImageInput.value = state.settings?.backgroundImage || '';
+    applyBackgroundImage(state.settings?.backgroundImage || '');
+    bgImageInput.addEventListener('change', () => {
+      const imgPath = bgImageInput.value.trim();
+      if (!state.settings) state.settings = {};
+      state.settings.backgroundImage = imgPath;
+      ipcRenderer.invoke('settings:set', { backgroundImage: imgPath });
+      applyBackgroundImage(imgPath);
+    });
+  }
+  if (bgImageBrowse) {
+    bgImageBrowse.addEventListener('click', async () => {
+      const result = await ipcRenderer.invoke('dialog:open-file', {
+        filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
+      });
+      if (result && bgImageInput) {
+        bgImageInput.value = result;
+        bgImageInput.dispatchEvent(new Event('change'));
       }
     });
   }

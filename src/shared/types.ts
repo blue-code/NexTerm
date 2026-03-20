@@ -76,7 +76,8 @@ export interface AppSettings {
   fontFamily: string;
   fontSize: number;
   scrollbackLimit: number;
-  theme: 'dark' | 'light' | 'system';
+  theme: 'dark' | 'light' | 'sakura' | 'monokai' | 'nord' | 'solarized';
+  backgroundImage: string; // 배경 이미지 경로 (빈 문자열이면 비활성)
   sidebarWidth: number;
   unfocusedPanelOpacity: number;
   notificationSound: boolean;

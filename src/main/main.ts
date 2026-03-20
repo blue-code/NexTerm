@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -39,6 +39,7 @@ const defaultSettings: AppSettings = {
   fontSize: 14,
   scrollbackLimit: 10000,
   theme: 'dark',
+  backgroundImage: '',
   sidebarWidth: 240,
   unfocusedPanelOpacity: 0.6,
   notificationSound: true,
@@ -46,7 +47,30 @@ const defaultSettings: AppSettings = {
   socketControlMode: 'nextermOnly',
 };
 
-let currentSettings: AppSettings = { ...defaultSettings };
+// 설정 파일 영속화 경로
+const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+
+function loadSettings(): AppSettings {
+  try {
+    if (fs.existsSync(settingsPath)) {
+      const json = fs.readFileSync(settingsPath, 'utf-8');
+      return { ...defaultSettings, ...JSON.parse(json) };
+    }
+  } catch (err) {
+    console.error('설정 로드 실패:', err);
+  }
+  return { ...defaultSettings };
+}
+
+function saveSettings(settings: AppSettings): void {
+  try {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('설정 저장 실패:', err);
+  }
+}
+
+let currentSettings: AppSettings = loadSettings();
 
 function createWindow(): void {
   // 세션에서 창 크기 복원 시도
@@ -183,8 +207,19 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, (_event, partial: Partial<AppSettings>) => {
     currentSettings = { ...currentSettings, ...partial };
+    saveSettings(currentSettings);
     mainWindow?.webContents.send('settings:changed', currentSettings);
     return currentSettings;
+  });
+
+  // 파일 선택 다이얼로그 (배경 이미지 등)
+  ipcMain.handle('dialog:open-file', async (_event, opts: { filters?: Array<{ name: string; extensions: string[] }> }) => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: opts?.filters,
+    });
+    return result.canceled ? null : result.filePaths[0];
   });
 
   // 세션 저장

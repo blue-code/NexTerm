@@ -154,9 +154,20 @@
         <div class="setting-group">
           <label>테마</label>
           <select id="setting-theme" class="setting-input">
-            <option value="dark">다크</option>
+            <option value="dark">다크 (Tokyo Night)</option>
             <option value="light">라이트</option>
+            <option value="sakura">사쿠라 (핑크)</option>
+            <option value="monokai">Monokai</option>
+            <option value="nord">Nord</option>
+            <option value="solarized">Solarized Dark</option>
           </select>
+        </div>
+        <div class="setting-group">
+          <label>배경 이미지</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="setting-bg-image" class="setting-input" placeholder="이미지 경로 (비우면 해제)" style="flex:1">
+            <button id="btn-bg-image-browse" class="text-btn" style="white-space:nowrap">찾기...</button>
+          </div>
         </div>
         <div class="setting-group">
           <label>알림 사운드</label>
