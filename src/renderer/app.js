@@ -397,6 +397,9 @@ function updatePanelCwd(panelId, title) {
   // 유효한 Windows 경로인지 간이 검증 (드라이브 문자 또는 UNC 경로)
   if (!/^[A-Za-z]:[\\/]/.test(cwdPath) && !/^\\\\/.test(cwdPath)) return;
 
+  // 셸 실행 파일 경로는 무시 (powershell.exe, cmd.exe 등)
+  if (/\.(exe|cmd|bat|com)$/i.test(cwdPath)) return;
+
   const folderName = cwdPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
   if (!folderName) return;
 

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 
 // 프로덕션/개발 환경 경로 해결
 // 개발: __dirname = <project>/dist/main/
@@ -107,7 +108,11 @@ function setupIpcHandlers(): void {
   // 터미널 생성
   ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string }) => {
     const shellPath = opts.shell || process.env.COMSPEC || 'cmd.exe';
-    const cwd = opts.cwd || process.env.USERPROFILE || 'C:\\';
+    // cwd가 유효하지 않으면 홈 디렉토리로 폴백 (에러 코드 267 방지)
+    const requestedCwd = opts.cwd || process.env.USERPROFILE || 'C:\\';
+    const cwd = (requestedCwd && fs.existsSync(requestedCwd) && fs.statSync(requestedCwd).isDirectory())
+      ? requestedCwd
+      : (process.env.USERPROFILE || 'C:\\');
     terminalService.create(opts.id, shellPath, cwd);
 
     // 터미널 출력 → 렌더러 전달
