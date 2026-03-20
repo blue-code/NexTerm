@@ -24,6 +24,8 @@ export interface PanelState {
   // 터미널 패널용
   cwd?: string;
   scrollback?: string;
+  shell?: string;
+  shellCommand?: string;
   // 브라우저 패널용
   url?: string;
   // 마크다운 패널용
@@ -147,3 +149,31 @@ export const IPC_CHANNELS = {
   // 앱
   APP_READY: 'app:ready',
 } as const;
+
+// ── preload 브릿지 API 타입 ──
+
+export interface ElectronAPI {
+  invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+  send(channel: string, ...args: unknown[]): void;
+  on(channel: string, callback: (...args: unknown[]) => void): () => void;
+  clipboard: {
+    readText(): string;
+    writeText(text: string): void;
+  };
+  env: {
+    USERPROFILE: string;
+  };
+}
+
+// 렌더러에서 IPC 명령 수신 시 사용하는 타입
+export interface IpcCommandPayload {
+  method: string;
+  params: Record<string, unknown>;
+}
+
+// Git 상태 조회 결과
+export interface GitStatusResult {
+  branch: string | null;
+  dirty: boolean;
+  prNumber: number | null;
+}

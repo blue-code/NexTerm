@@ -12,6 +12,7 @@ import { GitService } from './services/git-service';
 import { PortScannerService } from './services/port-scanner-service';
 import { SessionService } from './services/session-service';
 import { IpcPipeServer } from './ipc/pipe-server';
+import { initFileLogging, createLogger, setLogLevel } from './services/logger';
 import {
   IPC_CHANNELS,
   WorkspaceState,
@@ -26,12 +27,20 @@ if (!gotLock) {
   app.quit();
 }
 
+// 로거 초기화
+initFileLogging();
+if (process.argv.includes('--dev')) {
+  setLogLevel('debug');
+}
+const log = createLogger('main');
+
 let mainWindow: BrowserWindow | null = null;
 const terminalService = new TerminalService();
 const gitService = new GitService();
 const portScanner = new PortScannerService();
 const sessionService = new SessionService();
 let pipeServer: IpcPipeServer | null = null;
+let sessionSaveInterval: ReturnType<typeof setInterval> | null = null;
 
 // 기본 설정
 const defaultSettings: AppSettings = {
@@ -58,7 +67,7 @@ function loadSettings(): AppSettings {
       return { ...defaultSettings, ...JSON.parse(json) };
     }
   } catch (err) {
-    console.error('설정 로드 실패:', err);
+    log.error('설정 로드 실패', err);
   }
   return { ...defaultSettings };
 }
@@ -67,7 +76,7 @@ function saveSettings(settings: AppSettings): void {
   try {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
   } catch (err) {
-    console.error('설정 저장 실패:', err);
+    log.error('설정 저장 실패', err);
   }
 }
 
@@ -106,8 +115,9 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     backgroundColor: '#1a1b26',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
       // 브라우저 패널용 webview 허용
       webviewTag: true,
     },
@@ -126,7 +136,7 @@ function createWindow(): void {
   });
 
   // 세션 자동 저장 (8초 간격)
-  setInterval(() => {
+  sessionSaveInterval = setInterval(() => {
     if (mainWindow && currentSettings.sessionRestoreEnabled) {
       mainWindow.webContents.send('session:request-snapshot');
     }
@@ -144,7 +154,7 @@ function setupIpcHandlers(): void {
   });
   ipcMain.on('window:close', () => mainWindow?.close());
   // 터미널 생성
-  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string }) => {
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string }) => {
     const shellPath = opts.shell || process.env.COMSPEC || 'cmd.exe';
     // cwd가 유효하지 않으면 홈 디렉토리로 폴백 (에러 코드 267 방지)
     const requestedCwd = opts.cwd || process.env.USERPROFILE || 'C:\\';
@@ -152,6 +162,17 @@ function setupIpcHandlers(): void {
       ? requestedCwd
       : (process.env.USERPROFILE || 'C:\\');
     terminalService.create(opts.id, shellPath, cwd);
+
+    // 감지된 명령줄이 있으면 터미널에 자동 입력 (start 명령 가로채기)
+    if (opts.shellCommand) {
+      // 명령줄에서 실행할 부분 추출: "cmd /k ..." → /k 이후 명령
+      const cmdMatch = opts.shellCommand.match(/\/[kK]\s+(.+)/);
+      if (cmdMatch) {
+        setTimeout(() => {
+          terminalService.write(opts.id, cmdMatch[1].replace(/^"(.*)"$/, '$1') + '\r');
+        }, 500);
+      }
+    }
 
     // 터미널 출력 → 렌더러 전달
     terminalService.onData(opts.id, (data: string) => {
@@ -284,6 +305,14 @@ function setupPipeServer(): void {
 // ── 앱 라이프사이클 ──
 
 app.whenReady().then(() => {
+  terminalService.ensureBinScripts();
+
+  // 자식 프로세스 감시: 배치 파일의 start 명령으로 새 콘솔 창이 생성되면
+  // 해당 프로세스를 종료하고 NexTerm 새 패널로 전환
+  terminalService.onChildTerminal((commandLine: string) => {
+    mainWindow?.webContents.send('terminal:child-detected', { commandLine });
+  });
+
   createWindow();
   setupIpcHandlers();
   setupPipeServer();
@@ -303,6 +332,7 @@ app.on('second-instance', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (sessionSaveInterval) clearInterval(sessionSaveInterval);
   terminalService.destroyAll();
   pipeServer?.stop();
   app.quit();

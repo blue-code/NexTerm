@@ -4,3 +4,4 @@ release/
 *.js.map
 *.d.ts
 !src/renderer/*.js
+!scripts/*.js

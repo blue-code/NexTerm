@@ -105,6 +105,8 @@ NexTerm CLI - AI 코딩 에이전트를 위한 터미널 멀티플렉서
 
   new-split            패널 분할
     --direction DIR      horizontal 또는 vertical (기본: horizontal)
+    --cwd PATH           새 패널의 작업 디렉토리
+    --shell SHELL        새 패널의 셸 (powershell.exe, cmd.exe 등)
 
   open-browser         브라우저 패널 열기
     --url URL            이동할 URL

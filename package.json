@@ -4,14 +4,19 @@
   "description": "AI 코딩 에이전트를 위한 Windows 터미널 멀티플렉서",
   "main": "dist/main/main.js",
   "scripts": {
-    "build": "tsc",
+    "build:main": "tsc",
+    "build:renderer": "node scripts/build-renderer.js",
+    "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build && electron .",
-    "dev": "tsc && electron . --dev",
+    "dev": "npm run build && electron . --dev",
+    "dev:watch": "node scripts/build-renderer.js --watch",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "dist:win": "tsc && electron-builder --win",
-    "dist:mac": "tsc && electron-builder --mac",
-    "dist:all": "tsc && electron-builder --win --mac"
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:all": "npm run build && electron-builder --win --mac",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "",
   "license": "MIT",
@@ -19,7 +24,9 @@
     "@types/node": "^20.11.0",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
-    "typescript": "^5.3.3"
+    "esbuild": "^0.27.4",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.9.0",
