@@ -4,6 +4,7 @@
  */
 import * as pty from 'node-pty';
 import * as os from 'os';
+import * as fs from 'fs';
 
 interface TerminalInstance {
   process: pty.IPty;
@@ -144,19 +145,29 @@ export class TerminalService {
 
   /** Windows에서 사용 가능한 셸 경로 결정 */
   private resolveShell(requested: string): string {
-    // PowerShell 7 우선, 없으면 Windows PowerShell, 최종 cmd.exe
-    const candidates = [
-      requested,
+    // 이름만 지정된 경우 (powershell.exe 등) PATH에서 찾도록 그대로 반환
+    if (!requested.includes('\\') && !requested.includes('/')) {
+      return requested;
+    }
+
+    // 전체 경로가 존재하면 그대로 사용
+    if (fs.existsSync(requested)) {
+      return requested;
+    }
+
+    // 지정된 경로가 없을 때 폴백: PowerShell 7 → Windows PowerShell → cmd.exe
+    const fallbacks = [
       'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
       'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
       process.env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe',
     ];
 
-    // 요청된 셸이 특정 경로가 아닌 경우 그대로 반환 (PATH에서 찾도록)
-    if (!requested.includes('\\') && !requested.includes('/')) {
-      return requested;
+    for (const candidate of fallbacks) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
     }
 
-    return requested;
+    return process.env.COMSPEC || 'cmd.exe';
   }
 }

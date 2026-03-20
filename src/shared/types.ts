@@ -83,6 +83,7 @@ export interface AppSettings {
   notificationSound: boolean;
   sessionRestoreEnabled: boolean;
   socketControlMode: 'off' | 'nextermOnly' | 'allowAll';
+  defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
 }
 
 // IPC 메시지 타입

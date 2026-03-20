@@ -2,7 +2,7 @@
  * NexTerm 렌더러 프로세스 - 메인 앱 로직
  * 워크스페이스, 분할 패널, 터미널, 브라우저, 커맨드 팔레트를 관리한다.
  */
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, clipboard } = require('electron');
 const { Terminal } = require('@xterm/xterm');
 const { FitAddon } = require('@xterm/addon-fit');
 const { WebglAddon } = require('@xterm/addon-webgl');
@@ -362,13 +362,23 @@ function createTerminalInstance(panelId, cwd) {
     if (ctrl && key === ']') return false;
     if (ctrl && key === '[') return false;
     if (ctrl && shift && key === 'U') return false;
-    // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT로 전달
-    if (ctrl && !shift && key === 'c' && terminal.hasSelection()) {
-      navigator.clipboard.writeText(terminal.getSelection());
-      terminal.clearSelection();
+    // Ctrl+C: 선택 영역이 있으면 클립보드 복사, 없으면 SIGINT(\x03) 전달
+    if (ctrl && !shift && key.toLowerCase() === 'c') {
+      if (terminal.hasSelection()) {
+        clipboard.writeText(terminal.getSelection());
+        terminal.clearSelection();
+        return false; // xterm에 전달하지 않음
+      }
+      return true; // 선택 없으면 SIGINT로 전달
+    }
+    // Ctrl+V: 클립보드 내용을 PTY로 직접 전송 (xterm keydown 차단하여 \x16 이중 입력 방지)
+    if (ctrl && !shift && key.toLowerCase() === 'v') {
+      const text = clipboard.readText();
+      if (text) {
+        ipcRenderer.send('terminal:input', { id: panelId, data: text });
+      }
       return false;
     }
-    // Ctrl+V: xterm 기본 paste 처리에 위임 (true 반환 → 브라우저 paste 이벤트 발생)
     return true; // 나머지는 xterm에 전달
   });
 
@@ -484,14 +494,14 @@ function renderSidebar() {
 
     let metaHtml = '';
     if (ws.gitBranch) {
-      metaHtml += `<span class="tab-branch">${ws.gitBranch}</span>`;
+      metaHtml += `<span class="tab-branch">${escapeHtml(ws.gitBranch)}</span>`;
       if (ws.gitDirty) metaHtml += '<span class="tab-dirty">●</span>';
     }
     if (ws.prNumber) {
-      metaHtml += `<span class="tab-pr">#${ws.prNumber}</span>`;
+      metaHtml += `<span class="tab-pr">#${escapeHtml(String(ws.prNumber))}</span>`;
     }
     if (ws.listeningPorts.length > 0) {
-      metaHtml += `<span class="tab-ports">:${ws.listeningPorts.join(', :')}</span>`;
+      metaHtml += `<span class="tab-ports">:${escapeHtml(ws.listeningPorts.join(', :'))}</span>`;
     }
 
     tab.innerHTML = `
@@ -744,6 +754,10 @@ function setupSplitHandleDrag(handle, node, container) {
     document.body.style.cursor = node.direction === 'horizontal' ? 'col-resize' : 'row-resize';
 
     const rect = container.getBoundingClientRect();
+    // DOM 재구성 없이 CSS만 변경하기 위해 자식 요소 캐싱
+    const first = container.children[0];
+    const second = container.children[2]; // [0]=first [1]=handle [2]=second
+    let fitTimer = null;
 
     const onMouseMove = (e) => {
       if (!isDragging) return;
@@ -754,13 +768,31 @@ function setupSplitHandleDrag(handle, node, container) {
         ratio = (e.clientY - rect.top) / rect.height;
       }
       node.ratio = Math.max(0.15, Math.min(0.85, ratio));
-      renderWorkspaceContent();
+
+      // CSS만 업데이트 (전체 DOM 재구성 대신)
+      if (node.direction === 'horizontal') {
+        first.style.width = `calc(${node.ratio * 100}% - 2px)`;
+        second.style.width = `calc(${(1 - node.ratio) * 100}% - 2px)`;
+      } else {
+        first.style.height = `calc(${node.ratio * 100}% - 2px)`;
+        second.style.height = `calc(${(1 - node.ratio) * 100}% - 2px)`;
+      }
+
+      // 터미널 fit 디바운스 (16ms 간격)
+      if (!fitTimer) {
+        fitTimer = setTimeout(() => {
+          fitAllTerminals();
+          fitTimer = null;
+        }, 16);
+      }
     };
 
     const onMouseUp = () => {
       isDragging = false;
       handle.classList.remove('dragging');
       document.body.style.cursor = '';
+      if (fitTimer) { clearTimeout(fitTimer); fitTimer = null; }
+      fitAllTerminals();
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
@@ -1491,6 +1523,24 @@ async function init() {
     });
   }
 
+  // 스크롤백 설정 적용
+  const scrollbackInput = document.getElementById('setting-scrollback');
+  if (scrollbackInput) {
+    scrollbackInput.value = state.settings?.scrollbackLimit || 10000;
+    scrollbackInput.addEventListener('change', () => {
+      const limit = parseInt(scrollbackInput.value, 10);
+      if (limit >= 1000 && limit <= 100000) {
+        if (!state.settings) state.settings = {};
+        state.settings.scrollbackLimit = limit;
+        ipcRenderer.invoke('settings:set', { scrollbackLimit: limit });
+        // 기존 터미널에 scrollback 반영
+        for (const [, inst] of state.terminalInstances) {
+          try { inst.terminal.options.scrollback = limit; } catch {}
+        }
+      }
+    });
+  }
+
   // 테마 설정 적용
   const themeSelect = document.getElementById('setting-theme');
   if (themeSelect) {
@@ -1531,12 +1581,27 @@ async function init() {
     });
   }
 
-  // 셸 설정 적용
+  // 알림 사운드 설정 적용
+  const notifSoundCheckbox = document.getElementById('setting-notification-sound');
+  if (notifSoundCheckbox) {
+    notifSoundCheckbox.checked = state.settings?.notificationSound !== false;
+    notifSoundCheckbox.addEventListener('change', () => {
+      if (!state.settings) state.settings = {};
+      state.settings.notificationSound = notifSoundCheckbox.checked;
+      ipcRenderer.invoke('settings:set', { notificationSound: notifSoundCheckbox.checked });
+    });
+  }
+
+  // 셸 설정 적용 (영속화)
   const shellSelect = document.getElementById('setting-shell');
   if (shellSelect) {
+    shellSelect.value = state.settings?.defaultShell || 'powershell.exe';
     state.defaultShell = shellSelect.value;
     shellSelect.addEventListener('change', () => {
       state.defaultShell = shellSelect.value;
+      if (!state.settings) state.settings = {};
+      state.settings.defaultShell = shellSelect.value;
+      ipcRenderer.invoke('settings:set', { defaultShell: shellSelect.value });
     });
   }
 

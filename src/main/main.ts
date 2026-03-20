@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -45,6 +45,7 @@ const defaultSettings: AppSettings = {
   notificationSound: true,
   sessionRestoreEnabled: true,
   socketControlMode: 'nextermOnly',
+  defaultShell: 'powershell.exe',
 };
 
 // 설정 파일 영속화 경로
@@ -75,12 +76,25 @@ let currentSettings: AppSettings = loadSettings();
 function createWindow(): void {
   // 세션에서 창 크기 복원 시도
   const session = sessionService.load();
-  const bounds = session?.windowBounds ?? {
-    x: undefined,
-    y: undefined,
+  let bounds = session?.windowBounds ?? {
+    x: undefined as number | undefined,
+    y: undefined as number | undefined,
     width: 1400,
     height: 900,
   };
+
+  // 저장된 좌표가 현재 모니터 범위 밖이면 기본값으로 폴백
+  if (bounds.x !== undefined && bounds.y !== undefined) {
+    const displays = screen.getAllDisplays();
+    const inBounds = displays.some(display => {
+      const { x, y, width, height } = display.bounds;
+      return bounds.x! >= x - 100 && bounds.x! < x + width + 100 &&
+             bounds.y! >= y - 100 && bounds.y! < y + height + 100;
+    });
+    if (!inBounds) {
+      bounds = { x: undefined, y: undefined, width: bounds.width || 1400, height: bounds.height || 900 };
+    }
+  }
 
   mainWindow = new BrowserWindow({
     ...bounds,
@@ -222,8 +236,11 @@ function setupIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0];
   });
 
-  // 세션 저장
+  // 세션 저장 (창 위치/크기를 메인 프로세스에서 주입)
   ipcMain.on(IPC_CHANNELS.SESSION_SAVE, (_event, snapshot) => {
+    if (mainWindow) {
+      snapshot.windowBounds = mainWindow.getBounds();
+    }
     sessionService.save(snapshot);
   });
 
@@ -295,4 +312,21 @@ app.on('before-quit', () => {
   // 세션 저장 후 정리
   terminalService.destroyAll();
   pipeServer?.stop();
+});
+
+// ── 보안: webview 및 새 창 제어 ──
+
+app.on('web-contents-created', (_event, contents) => {
+  // webview 내부에서 Node.js 접근 차단
+  contents.on('will-attach-webview' as any, (_waEvent: any, webPreferences: any, _params: any) => {
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+  });
+
+  // 외부 링크는 시스템 기본 브라우저로 열기 (앱 내 새 창 생성 차단)
+  contents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' as const };
+  });
 });

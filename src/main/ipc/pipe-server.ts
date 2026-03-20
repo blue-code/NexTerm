@@ -13,6 +13,8 @@ const PIPE_NAME = '\\\\.\\pipe\\nexterm-ipc';
 export class IpcPipeServer {
   private server: net.Server | null = null;
   private commandHandler: CommandHandler | null = null;
+  private retryCount = 0;
+  private readonly MAX_RETRIES = 3;
 
   /** 명령 핸들러 등록 */
   onCommand(handler: CommandHandler): void {
@@ -44,9 +46,12 @@ export class IpcPipeServer {
 
     this.server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        // 이전 인스턴스 파이프가 남아있으면 제거 후 재시도
-        // Windows Named Pipe는 자동 정리되지만, 만약을 위해
-        console.warn('파이프 이미 사용 중, 재시도...');
+        if (this.retryCount >= this.MAX_RETRIES) {
+          console.error('파이프 서버 시작 실패: 최대 재시도 횟수 초과');
+          return;
+        }
+        this.retryCount++;
+        console.warn(`파이프 이미 사용 중, 재시도 (${this.retryCount}/${this.MAX_RETRIES})...`);
         setTimeout(() => this.start(), 1000);
         return;
       }
@@ -54,6 +59,7 @@ export class IpcPipeServer {
     });
 
     this.server.listen(PIPE_NAME, () => {
+      this.retryCount = 0; // 성공 시 카운터 리셋
       console.log('IPC 파이프 서버 시작:', PIPE_NAME);
     });
   }
