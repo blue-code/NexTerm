@@ -308,6 +308,19 @@ function createTerminalInstance(panelId, cwd) {
     if (ctrl && key === ']') return false;
     if (ctrl && key === '[') return false;
     if (ctrl && shift && key === 'U') return false;
+    // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT로 전달
+    if (ctrl && !shift && key === 'c' && terminal.hasSelection()) {
+      navigator.clipboard.writeText(terminal.getSelection());
+      terminal.clearSelection();
+      return false;
+    }
+    // Ctrl+V: 클립보드에서 붙여넣기
+    if (ctrl && !shift && key === 'v') {
+      navigator.clipboard.readText().then(text => {
+        if (text) ipcRenderer.send('terminal:input', { id: panelId, data: text });
+      });
+      return false;
+    }
     return true; // 나머지는 xterm에 전달
   });
 
