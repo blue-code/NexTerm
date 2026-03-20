@@ -328,6 +328,11 @@ function createTerminalInstance(panelId, cwd) {
     ipcRenderer.send('terminal:resize', { id: panelId, cols, rows });
   });
 
+  // 셸이 타이틀을 변경하면 패널 헤더에 폴더명 반영 (cd 추적)
+  terminal.onTitleChange((title) => {
+    updatePanelCwd(panelId, title);
+  });
+
   const inst = { terminal, fitAddon, searchAddon, container };
   state.terminalInstances.set(panelId, inst);
   return inst;
@@ -365,6 +370,40 @@ ipcRenderer.on('terminal:close', (_event, { id, exitCode }) => {
     }
   }
 });
+
+/**
+ * 셸 타이틀 변경 시 패널 헤더의 폴더명을 갱신한다.
+ * cmd.exe: "C:\Users\foo" 형태, PowerShell: "PS C:\Users\foo>" 형태
+ */
+function updatePanelCwd(panelId, title) {
+  if (!title) return;
+
+  // 타이틀에서 경로 추출 (PowerShell "PS path>" / cmd.exe 순수 경로)
+  let cwdPath = title.replace(/^(PS\s+|)/, '').replace(/[>]\s*$/, '').trim();
+
+  // 유효한 Windows 경로인지 간이 검증 (드라이브 문자 또는 UNC 경로)
+  if (!/^[A-Za-z]:[\\/]/.test(cwdPath) && !/^\\\\/.test(cwdPath)) return;
+
+  const folderName = cwdPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+  if (!folderName) return;
+
+  // 패널 상태 갱신
+  for (const ws of state.workspaces) {
+    const panel = ws.panels.find(p => p.id === panelId);
+    if (panel) {
+      panel.cwd = cwdPath;
+      break;
+    }
+  }
+
+  // DOM 헤더 업데이트
+  const pane = document.querySelector(`.split-pane[data-panel-id="${panelId}"]`);
+  if (!pane) return;
+  const titleText = pane.querySelector('.panel-title-text');
+  if (titleText) {
+    titleText.textContent = `터미널: ${folderName}`;
+  }
+}
 
 // ── UI 렌더링 ──
 
@@ -520,10 +559,22 @@ function renderPanel(panel) {
   const typeIcons = { terminal: '▸', browser: '◎', markdown: '¶' };
   const typeLabels = { terminal: '터미널', browser: '브라우저', markdown: '마크다운' };
 
+  // 터미널 패널인 경우 cwd에서 폴더명 추출하여 표시
+  const panelLabel = (() => {
+    if (panel.type === 'terminal') {
+      const cwd = panel.cwd || getActiveWorkspace()?.cwd || '';
+      if (cwd) {
+        const folderName = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+        return folderName ? `${typeLabels[panel.type]}: ${folderName}` : typeLabels[panel.type];
+      }
+    }
+    return panel.title || typeLabels[panel.type];
+  })();
+
   header.innerHTML = `
     <div class="panel-title">
       <span class="panel-type-icon">${typeIcons[panel.type]}</span>
-      <span>${escapeHtml(panel.title || typeLabels[panel.type])}</span>
+      <span class="panel-title-text">${escapeHtml(panelLabel)}</span>
     </div>
     <div class="panel-actions">
       ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="search" title="검색 (Ctrl+F)">⌕</button>' : ''}
