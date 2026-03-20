@@ -34,10 +34,7 @@ export class TerminalService {
     env['NEXTERM_PANEL_ID'] = id;
     env['TERM_PROGRAM'] = 'nexterm';
 
-    // PowerShell인 경우 프롬프트에 OSC 2 시퀀스 주입 (CWD 실시간 추적용)
-    const spawnArgs = this.buildShellArgs(resolvedShell);
-
-    const ptyProcess = pty.spawn(resolvedShell, spawnArgs, {
+    const ptyProcess = pty.spawn(resolvedShell, [], {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
@@ -119,27 +116,6 @@ export class TerminalService {
   /** 프로세스 PID 조회 (포트 스캐닝용) */
   getPid(id: string): number | undefined {
     return this.terminals.get(id)?.process.pid;
-  }
-
-  /**
-   * 셸 유형별 시작 인자 생성
-   * PowerShell: 프롬프트 함수를 재정의하여 매 프롬프트마다 OSC 2로 현재 경로 전송
-   * cmd.exe: 기본적으로 타이틀에 경로를 표시하므로 추가 설정 불필요
-   */
-  private buildShellArgs(shell: string): string[] {
-    if (/powershell|pwsh/i.test(shell)) {
-      // OSC 2 시퀀스: \e]2;{path}\a → xterm.js onTitleChange로 전달
-      const promptFn = [
-        'function prompt {',
-        '  $e=[char]27; $a=[char]7;',
-        '  $p=(Get-Location).Path;',
-        '  Write-Host -NoNewline ("$e]2;$p$a");',
-        '  return "PS $p> "',
-        '}',
-      ].join(' ');
-      return ['-NoLogo', '-NoExit', '-Command', promptFn];
-    }
-    return [];
   }
 
   /** Windows에서 사용 가능한 셸 경로 결정 */
