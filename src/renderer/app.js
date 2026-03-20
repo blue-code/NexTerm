@@ -120,12 +120,14 @@ function splitPanel(direction) {
   const targetPanelId = state.focusedPanelId || ws.activePanelId;
   if (!targetPanelId) return;
 
+  // 활성 패널의 현재 작업 디렉토리를 새 패널에 전달
+  const targetPanel = ws.panels.find(p => p.id === targetPanelId);
   const newPanelId = generateId();
   const newPanel = {
     id: newPanelId,
     type: 'terminal',
     title: '터미널',
-    cwd: ws.cwd,
+    cwd: targetPanel?.cwd || ws.cwd,
   };
   ws.panels.push(newPanel);
 
@@ -314,13 +316,7 @@ function createTerminalInstance(panelId, cwd) {
       terminal.clearSelection();
       return false;
     }
-    // Ctrl+V: 클립보드에서 붙여넣기
-    if (ctrl && !shift && key === 'v') {
-      navigator.clipboard.readText().then(text => {
-        if (text) ipcRenderer.send('terminal:input', { id: panelId, data: text });
-      });
-      return false;
-    }
+    // Ctrl+V: xterm 기본 paste 처리에 위임 (true 반환 → 브라우저 paste 이벤트 발생)
     return true; // 나머지는 xterm에 전달
   });
 
@@ -396,6 +392,9 @@ function updatePanelCwd(panelId, title) {
 
   // 유효한 Windows 경로인지 간이 검증 (드라이브 문자 또는 UNC 경로)
   if (!/^[A-Za-z]:[\\/]/.test(cwdPath) && !/^\\\\/.test(cwdPath)) return;
+
+  // 셸 실행 파일 경로는 무시 (powershell.exe, cmd.exe 등)
+  if (/\.(exe|cmd|bat|com)$/i.test(cwdPath)) return;
 
   const folderName = cwdPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
   if (!folderName) return;
@@ -1114,8 +1113,6 @@ if (sidebarHandle) {
 // ── 타이틀바 버튼 ──
 
 document.getElementById('btn-minimize')?.addEventListener('click', () => {
-  const { BrowserWindow } = require('@electron/remote') || {};
-  // Electron remote가 없으면 IPC 사용
   ipcRenderer.send('window:minimize');
 });
 
