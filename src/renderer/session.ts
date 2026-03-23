@@ -2,6 +2,7 @@
  * 세션 저장/복원
  */
 import { state, electronAPI } from './state';
+import { serializeTerminalBuffer, writeScrollbackToTerminal } from './terminal';
 import { createLogger } from './logger';
 import type { PanelState, SessionSnapshot, WorkspaceState } from '../../shared/types';
 
@@ -19,7 +20,8 @@ export function initSessionListeners(): void {
         ...ws,
         panels: ws.panels.map((p: PanelState) => ({
           ...p,
-          scrollback: undefined,
+          // 터미널 패널: xterm 버퍼에서 스크롤백 추출 (최대 4000라인)
+          scrollback: p.type === 'terminal' ? serializeTerminalBuffer(p.id) : undefined,
         })),
       })),
       activeWorkspaceId: state.activeWorkspaceId,

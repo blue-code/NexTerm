@@ -10,6 +10,15 @@ import type {
   AppNotification,
   AppSettings,
 } from '../../shared/types';
+import type { AgentInfo } from '../../shared/agent-types';
+
+/** 닫은 브라우저 패널 복원용 엔트리 */
+export interface ClosedBrowserTab {
+  url: string;
+  title: string;
+  browserProfile?: string;
+  closedAt: number;
+}
 
 // xterm 라이브러리 (번들에 포함)
 import { Terminal } from '@xterm/xterm';
@@ -58,6 +67,11 @@ export const state = {
   terminalInstances: new Map<string, TerminalInst>(),
   focusedPanelId: null as string | null,
   defaultShell: 'powershell.exe',
+  agentStatuses: new Map<string, AgentInfo>(),
+  closedBrowserTabs: [] as ClosedBrowserTab[],
+  zoomedPanelId: null as string | null, // 줌된 패널 (null이면 일반 레이아웃)
+  focusFollowsMouse: false, // 마우스 hover 시 자동 포커스
+  presentationMode: false, // 프레젠테이션 모드 (사이드바/타이틀바 숨김)
 };
 
 // ── 렌더링 콜백 (순환 의존성 해소용) ──

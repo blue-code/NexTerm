@@ -121,6 +121,8 @@ NexTerm CLI - AI 코딩 에이전트를 위한 터미널 멀티플렉서
 
   focus-window         NexTerm 창 활성화
 
+  tree                 워크스페이스/패널 계층 구조 표시
+
   help                 이 도움말 표시
 `);
 }
@@ -136,7 +138,13 @@ async function main(): Promise<void> {
   try {
     const result = await sendCommand(command, params);
     if (result && typeof result === 'object') {
-      console.log(JSON.stringify(result, null, 2));
+      const obj = result as Record<string, unknown>;
+      // tree 명령은 트리 문자열을 직접 출력
+      if (obj.tree && typeof obj.tree === 'string') {
+        console.log(obj.tree);
+      } else {
+        console.log(JSON.stringify(result, null, 2));
+      }
     } else {
       console.log('완료');
     }

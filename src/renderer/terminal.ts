@@ -7,6 +7,7 @@ import {
   Terminal, FitAddon, SearchAddon, WebglAddon,
 } from './state';
 import { TERMINAL_THEMES } from './themes';
+import { shouldInterceptKey } from './keyboard';
 import { createLogger } from './logger';
 import type { PanelState } from '../../shared/types';
 
@@ -27,6 +28,7 @@ export function createTerminalInstance(
   cwd?: string,
   shell?: string,
   shellCommand?: string,
+  scrollback?: string,
 ): TerminalInst {
   if (state.terminalInstances.has(panelId)) {
     return state.terminalInstances.get(panelId)!;
@@ -70,20 +72,6 @@ export function createTerminalInstance(
     const shift = e.shiftKey;
     const key = e.key;
 
-    if (ctrl && shift && key === 'P') return false;
-    if (ctrl && !shift && key === 'n') return false;
-    if (ctrl && !shift && key === 'w') return false;
-    if (ctrl && shift && key === 'W') return false;
-    if (ctrl && !shift && key === 'd') return false;
-    if (ctrl && shift && key === 'D') return false;
-    if (ctrl && !shift && key === 'b') return false;
-    if (ctrl && shift && key === 'B') return false;
-    if (ctrl && !shift && key === 'f') return false;
-    if (ctrl && key === 'Tab') return false;
-    if (ctrl && key === ']') return false;
-    if (ctrl && key === '[') return false;
-    if (ctrl && shift && key === 'U') return false;
-
     // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT
     if (ctrl && !shift && key.toLowerCase() === 'c') {
       if (terminal.hasSelection()) {
@@ -103,8 +91,16 @@ export function createTerminalInstance(
       return false;
     }
 
+    // 커스텀 키바인딩에 등록된 단축키는 xterm에서 차단
+    if (shouldInterceptKey(e)) return false;
+
     return true;
   });
+
+  // 세션 복원 시 저장된 스크롤백 기록
+  if (scrollback) {
+    terminal.write(scrollback + '\r\n');
+  }
 
   // 메인 프로세스에 터미널 생성 요청
   electronAPI.invoke('terminal:create', {
@@ -237,6 +233,48 @@ function updatePanelCwd(panelId: string, title: string): void {
   if (titleText) {
     titleText.textContent = `터미널: ${folderName}`;
   }
+}
+
+// ── 스크롤백 직렬화/복원 ──
+
+const MAX_SCROLLBACK_LINES = 4000;
+const MAX_SCROLLBACK_CHARS = 400000;
+
+/** xterm 버퍼에서 스크롤백 텍스트를 추출한다 (ANSI 포함, 최대 4000라인) */
+export function serializeTerminalBuffer(panelId: string): string | undefined {
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst) return undefined;
+
+  const buffer = inst.terminal.buffer.active;
+  const totalLines = buffer.length;
+  if (totalLines === 0) return undefined;
+
+  // 최대 라인 수 제한
+  const startLine = Math.max(0, totalLines - MAX_SCROLLBACK_LINES);
+  const lines: string[] = [];
+  let charCount = 0;
+
+  for (let i = startLine; i < totalLines; i++) {
+    const line = buffer.getLine(i);
+    if (!line) continue;
+    const text = line.translateToString(true); // trimRight
+    charCount += text.length;
+    if (charCount > MAX_SCROLLBACK_CHARS) break;
+    lines.push(text);
+  }
+
+  // 빈 내용은 저장하지 않음
+  const result = lines.join('\n');
+  return result.trim().length > 0 ? result : undefined;
+}
+
+/** 저장된 스크롤백을 터미널에 기록한다 (세션 복원 시) */
+export function writeScrollbackToTerminal(panelId: string, scrollback: string): void {
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst || !scrollback) return;
+
+  // 줄 단위로 기록 (ANSI 이스케이프 포함된 텍스트 그대로)
+  inst.terminal.write(scrollback + '\r\n');
 }
 
 // ── IPC 이벤트 리스너 ──

@@ -11,6 +11,10 @@ import { TerminalService } from './services/terminal-service';
 import { GitService } from './services/git-service';
 import { PortScannerService } from './services/port-scanner-service';
 import { SessionService } from './services/session-service';
+import { AgentDetectService } from './services/agent-detect-service';
+import { BrowserHistoryService } from './services/browser-history-service';
+import { AuthService } from './services/auth-service';
+import { WindowManagerService } from './services/window-manager-service';
 import { IpcPipeServer } from './ipc/pipe-server';
 import { initFileLogging, createLogger, setLogLevel } from './services/logger';
 import {
@@ -34,11 +38,14 @@ if (process.argv.includes('--dev')) {
 }
 const log = createLogger('main');
 
-let mainWindow: BrowserWindow | null = null;
+const windowManager = new WindowManagerService();
 const terminalService = new TerminalService();
 const gitService = new GitService();
 const portScanner = new PortScannerService();
 const sessionService = new SessionService();
+const agentDetectService = new AgentDetectService();
+const browserHistoryService = new BrowserHistoryService();
+const authService = new AuthService();
 let pipeServer: IpcPipeServer | null = null;
 let sessionSaveInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -55,6 +62,8 @@ const defaultSettings: AppSettings = {
   sessionRestoreEnabled: true,
   socketControlMode: 'nextermOnly',
   defaultShell: 'powershell.exe',
+  externalUrlPatterns: [],
+  language: 'ko',
 };
 
 // 설정 파일 영속화 경로
@@ -85,74 +94,49 @@ let currentSettings: AppSettings = loadSettings();
 function createWindow(): void {
   // 세션에서 창 크기 복원 시도
   const session = sessionService.load();
-  let bounds = session?.windowBounds ?? {
+  const bounds = session?.windowBounds ?? {
     x: undefined as number | undefined,
     y: undefined as number | undefined,
     width: 1400,
     height: 900,
   };
 
-  // 저장된 좌표가 현재 모니터 범위 밖이면 기본값으로 폴백
-  if (bounds.x !== undefined && bounds.y !== undefined) {
-    const displays = screen.getAllDisplays();
-    const inBounds = displays.some(display => {
-      const { x, y, width, height } = display.bounds;
-      return bounds.x! >= x - 100 && bounds.x! < x + width + 100 &&
-             bounds.y! >= y - 100 && bounds.y! < y + height + 100;
-    });
-    if (!inBounds) {
-      bounds = { x: undefined, y: undefined, width: bounds.width || 1400, height: bounds.height || 900 };
-    }
-  }
-
-  mainWindow = new BrowserWindow({
-    ...bounds,
-    minWidth: 800,
-    minHeight: 600,
-    title: 'NexTerm',
-    // 커스텀 타이틀바 사용
-    frame: false,
-    titleBarStyle: 'hidden',
+  windowManager.create({
+    appRoot,
+    preloadPath: path.join(__dirname, 'preload.js'),
+    isDev: process.argv.includes('--dev'),
+    bounds,
     backgroundColor: '#1a1b26',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      // 브라우저 패널용 webview 허용
-      webviewTag: true,
-    },
-    icon: path.join(appRoot, 'assets/icon.png'),
+    iconPath: path.join(appRoot, 'assets/icon.png'),
   });
 
-  mainWindow.loadFile(path.join(appRoot, 'src/renderer/index.html'));
-
-  // 개발 모드에서 DevTools 열기
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // 세션 자동 저장 (8초 간격) — 첫 윈도우 생성 시에만 타이머 설정
+  if (!sessionSaveInterval) {
+    sessionSaveInterval = setInterval(() => {
+      const win = windowManager.getFocusedWindow();
+      if (win && currentSettings.sessionRestoreEnabled) {
+        win.webContents.send('session:request-snapshot');
+      }
+    }, 8000);
   }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // 세션 자동 저장 (8초 간격)
-  sessionSaveInterval = setInterval(() => {
-    if (mainWindow && currentSettings.sessionRestoreEnabled) {
-      mainWindow.webContents.send('session:request-snapshot');
-    }
-  }, 8000);
 }
 
 // ── IPC 핸들러 등록 ──
 
 function setupIpcHandlers(): void {
   // 타이틀바 윈도우 컨트롤
-  ipcMain.on('window:minimize', () => mainWindow?.minimize());
-  ipcMain.on('window:maximize', () => {
-    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
-    else mainWindow?.maximize();
+  // 타이틀바 윈도우 컨트롤 — 요청을 보낸 윈도우를 대상으로 처리
+  ipcMain.on('window:minimize', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
   });
-  ipcMain.on('window:close', () => mainWindow?.close());
+  ipcMain.on('window:maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win?.isMaximized()) win.unmaximize();
+    else win?.maximize();
+  });
+  ipcMain.on('window:close', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
+  });
   // 터미널 생성
   ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string }) => {
     const shellPath = opts.shell || process.env.COMSPEC || 'cmd.exe';
@@ -174,13 +158,14 @@ function setupIpcHandlers(): void {
       }
     }
 
-    // 터미널 출력 → 렌더러 전달
+    // 터미널 출력 → 렌더러 전달 + AI 에이전트 감지
     terminalService.onData(opts.id, (data: string) => {
-      mainWindow?.webContents.send(IPC_CHANNELS.TERMINAL_DATA, { id: opts.id, data });
+      windowManager.broadcast(IPC_CHANNELS.TERMINAL_DATA, { id: opts.id, data });
+      agentDetectService.feed(opts.id, data);
     });
 
     terminalService.onExit(opts.id, (exitCode: number) => {
-      mainWindow?.webContents.send(IPC_CHANNELS.TERMINAL_CLOSE, { id: opts.id, exitCode });
+      windowManager.broadcast(IPC_CHANNELS.TERMINAL_CLOSE, { id: opts.id, exitCode });
     });
 
     return { success: true };
@@ -199,6 +184,7 @@ function setupIpcHandlers(): void {
   // 터미널 종료
   ipcMain.on(IPC_CHANNELS.TERMINAL_CLOSE, (_event, opts: { id: string }) => {
     terminalService.destroy(opts.id);
+    agentDetectService.removePanel(opts.id);
   });
 
   // Git 상태 조회
@@ -229,9 +215,8 @@ function setupIpcHandlers(): void {
         icon: path.join(appRoot, 'assets/icon.png'),
       });
       toast.on('click', () => {
-        mainWindow?.show();
-        mainWindow?.focus();
-        mainWindow?.webContents.send('notification:clicked', notif);
+        windowManager.showAndFocus();
+        windowManager.broadcast('notification:clicked', notif);
       });
       toast.show();
     }
@@ -243,14 +228,15 @@ function setupIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, (_event, partial: Partial<AppSettings>) => {
     currentSettings = { ...currentSettings, ...partial };
     saveSettings(currentSettings);
-    mainWindow?.webContents.send('settings:changed', currentSettings);
+    windowManager.broadcast('settings:changed', currentSettings);
     return currentSettings;
   });
 
   // 파일 선택 다이얼로그 (배경 이미지 등)
-  ipcMain.handle('dialog:open-file', async (_event, opts: { filters?: Array<{ name: string; extensions: string[] }> }) => {
-    if (!mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, {
+  ipcMain.handle('dialog:open-file', async (event, opts: { filters?: Array<{ name: string; extensions: string[] }> }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return null;
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
       filters: opts?.filters,
     });
@@ -258,9 +244,10 @@ function setupIpcHandlers(): void {
   });
 
   // 세션 저장 (창 위치/크기를 메인 프로세스에서 주입)
-  ipcMain.on(IPC_CHANNELS.SESSION_SAVE, (_event, snapshot) => {
-    if (mainWindow) {
-      snapshot.windowBounds = mainWindow.getBounds();
+  ipcMain.on(IPC_CHANNELS.SESSION_SAVE, (event, snapshot) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      snapshot.windowBounds = win.getBounds();
     }
     sessionService.save(snapshot);
   });
@@ -274,26 +261,174 @@ function setupIpcHandlers(): void {
   ipcMain.on('shell:open-external', (_event, url: string) => {
     shell.openExternal(url);
   });
+
+  // ── AI 에이전트 감지 ──
+
+  // 에이전트 상태 변경 시 렌더러에 알림 + Toast 표시
+  agentDetectService.onStatusChange((panelId, status, agentName) => {
+    windowManager.broadcast(IPC_CHANNELS.AGENT_STATUS_CHANGED, {
+      panelId, status, agentName,
+      completedAt: status === 'completed' ? Date.now() : undefined,
+    });
+
+    // 작업 완료 시 Windows Toast 알림
+    if (status === 'completed' && agentName && currentSettings.notificationSound) {
+      const toast = new Notification({
+        title: `${agentName} 작업 완료`,
+        body: '에이전트가 작업을 마치고 입력을 기다리고 있습니다.',
+        icon: path.join(appRoot, 'assets/icon.png'),
+      });
+      toast.on('click', () => {
+        windowManager.showAndFocus();
+      });
+      toast.show();
+    }
+  });
+
+  // 에이전트 전체 상태 조회
+  ipcMain.handle(IPC_CHANNELS.AGENT_GET_STATUS, () => {
+    const statuses = agentDetectService.getAllStatuses();
+    // Map → 직렬화 가능한 객체로 변환
+    const result: Record<string, unknown> = {};
+    for (const [panelId, info] of statuses) {
+      result[panelId] = info;
+    }
+    return result;
+  });
+
+  // ── 브라우저 히스토리 ──
+
+  ipcMain.on(IPC_CHANNELS.BROWSER_HISTORY_ADD, (_event, opts: { url: string; title: string }) => {
+    browserHistoryService.add(opts.url, opts.title);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BROWSER_HISTORY_SEARCH, (_event, opts: { query: string; limit?: number }) => {
+    return browserHistoryService.search(opts.query, opts.limit);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BROWSER_HISTORY_LIST, (_event, opts?: { limit?: number }) => {
+    return browserHistoryService.getRecent(opts?.limit);
+  });
+
+  // ── 커스텀 키바인딩 ──
+
+  const keybindingsPath = path.join(app.getPath('userData'), 'keybindings.json');
+
+  ipcMain.handle(IPC_CHANNELS.KEYBINDINGS_GET, () => {
+    try {
+      if (fs.existsSync(keybindingsPath)) {
+        return JSON.parse(fs.readFileSync(keybindingsPath, 'utf-8'));
+      }
+    } catch {
+      // 파싱 실패 시 빈 객체 반환
+    }
+    return {};
+  });
+
+  ipcMain.handle(IPC_CHANNELS.KEYBINDINGS_SET, (_event, bindings: Record<string, string>) => {
+    try {
+      fs.writeFileSync(keybindingsPath, JSON.stringify(bindings, null, 2), 'utf-8');
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
+  });
+
+  // ── 파일 읽기/감시 (마크다운 뷰어 등) ──
+
+  const fileWatchers = new Map<string, fs.FSWatcher>();
+
+  ipcMain.handle(IPC_CHANNELS.FILE_READ, (_event, opts: { filePath: string }) => {
+    try {
+      // UTF-8 우선, 실패 시 latin1 폴백
+      return fs.readFileSync(opts.filePath, 'utf-8');
+    } catch {
+      try {
+        return fs.readFileSync(opts.filePath, 'latin1');
+      } catch {
+        return null;
+      }
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILE_WATCH, (_event, opts: { filePath: string; panelId: string }) => {
+    const key = opts.panelId;
+    // 기존 감시 해제
+    fileWatchers.get(key)?.close();
+
+    try {
+      const watcher = fs.watch(opts.filePath, (eventType) => {
+        if (eventType === 'change') {
+          windowManager.broadcast(IPC_CHANNELS.FILE_CHANGED, { panelId: opts.panelId, filePath: opts.filePath });
+        }
+      });
+      fileWatchers.set(key, watcher);
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILE_UNWATCH, (_event, opts: { panelId: string }) => {
+    const watcher = fileWatchers.get(opts.panelId);
+    if (watcher) {
+      watcher.close();
+      fileWatchers.delete(opts.panelId);
+    }
+    return { success: true };
+  });
 }
 
 // ── Named Pipe IPC 서버 (CLI 제어용) ──
 
 function setupPipeServer(): void {
   pipeServer = new IpcPipeServer();
+  pipeServer.setControlMode(currentSettings.socketControlMode);
+  pipeServer.setAuthService(authService);
+
+  // password 모드에서 비밀번호가 없으면 자동 생성
+  if (currentSettings.socketControlMode === 'password' && !authService.hasPassword()) {
+    const pw = authService.generatePassword();
+    log.info('소켓 비밀번호 자동 생성:', pw);
+  }
 
   pipeServer.onCommand((method, params) => {
-    // CLI 명령을 렌더러에 전달
-    mainWindow?.webContents.send('ipc:command', { method, params });
+    // CLI 명령을 렌더러에 전달 (포커스된 윈도우)
+    windowManager.getFocusedWindow()?.webContents.send('ipc:command', { method, params });
 
     // 일부 명령은 메인 프로세스에서 직접 처리
     switch (method) {
       case 'focus-window':
-        mainWindow?.show();
-        mainWindow?.focus();
+        windowManager.showAndFocus();
         return { success: true };
       case 'new-window':
         createWindow();
         return { success: true };
+      case 'tree': {
+        // 마지막 저장된 세션에서 트리 구조 생성
+        const session = sessionService.load();
+        if (!session || !session.workspaces) {
+          return { tree: '(세션 데이터 없음)' };
+        }
+        const lines: string[] = ['NexTerm'];
+        for (let i = 0; i < session.workspaces.length; i++) {
+          const ws = session.workspaces[i];
+          const isLast = i === session.workspaces.length - 1;
+          const prefix = isLast ? '└─' : '├─';
+          const active = ws.id === session.activeWorkspaceId ? ' *' : '';
+          lines.push(`${prefix} ${ws.name}${active}`);
+          for (let j = 0; j < ws.panels.length; j++) {
+            const p = ws.panels[j];
+            const pIsLast = j === ws.panels.length - 1;
+            const branch = isLast ? '   ' : '│  ';
+            const pPrefix = pIsLast ? '└─' : '├─';
+            const icon = p.type === 'terminal' ? '▸' : p.type === 'browser' ? '◎' : '¶';
+            const detail = p.type === 'terminal' ? (p.cwd || '') : (p.url || p.filePath || '');
+            lines.push(`${branch}${pPrefix} ${icon} ${p.type} ${detail}`);
+          }
+        }
+        return { tree: lines.join('\n') };
+      }
       default:
         return null; // 렌더러 처리
     }
@@ -310,7 +445,7 @@ app.whenReady().then(() => {
   // 자식 프로세스 감시: 배치 파일의 start 명령으로 새 콘솔 창이 생성되면
   // 해당 프로세스를 종료하고 NexTerm 새 패널로 전환
   terminalService.onChildTerminal((commandLine: string) => {
-    mainWindow?.webContents.send('terminal:child-detected', { commandLine });
+    windowManager.broadcast('terminal:child-detected', { commandLine });
   });
 
   createWindow();
@@ -325,9 +460,10 @@ app.whenReady().then(() => {
 });
 
 app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+  const win = windowManager.getFocusedWindow();
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
   }
 });
 

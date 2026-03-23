@@ -120,8 +120,20 @@ export function closePanel(panelId: string): void {
     return;
   }
 
-  if (ws.panels.find((p: PanelState) => p.id === panelId)?.type === 'terminal') {
+  const closingPanel = ws.panels.find((p: PanelState) => p.id === panelId);
+  if (closingPanel?.type === 'terminal') {
     destroyTerminal(panelId);
+  } else if (closingPanel?.type === 'browser' && closingPanel.url) {
+    // 닫은 브라우저 탭을 스택에 저장 (최대 20개)
+    state.closedBrowserTabs.push({
+      url: closingPanel.url,
+      title: closingPanel.title,
+      browserProfile: closingPanel.browserProfile,
+      closedAt: Date.now(),
+    });
+    if (state.closedBrowserTabs.length > 20) {
+      state.closedBrowserTabs.shift();
+    }
   }
 
   ws.panels = ws.panels.filter((p: PanelState) => p.id !== panelId);
@@ -158,6 +170,49 @@ export function openBrowserPanel(url?: string): void {
   state.focusedPanelId = panelId;
   ws.activePanelId = panelId;
   triggerContentRender();
+}
+
+/** 포커스된 패널 줌/최대화 토글 */
+export function togglePanelZoom(): void {
+  if (state.zoomedPanelId) {
+    // 줌 해제
+    state.zoomedPanelId = null;
+  } else if (state.focusedPanelId) {
+    state.zoomedPanelId = state.focusedPanelId;
+  }
+  triggerContentRender();
+}
+
+/** 마크다운 뷰어 패널 열기 */
+export function openMarkdownPanel(filePath: string): void {
+  const ws = getActiveWorkspace();
+  if (!ws) return;
+
+  const panelId = generateId();
+  const fileName = filePath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'Markdown';
+  const panel: PanelState = {
+    id: panelId,
+    type: 'markdown',
+    title: fileName,
+    filePath,
+  };
+  ws.panels.push(panel);
+
+  const targetPanelId = state.focusedPanelId || ws.activePanelId;
+  if (targetPanelId) {
+    ws.splitLayout = splitNodeAt(ws.splitLayout, targetPanelId, panelId, 'horizontal');
+  }
+
+  state.focusedPanelId = panelId;
+  ws.activePanelId = panelId;
+  triggerContentRender();
+}
+
+/** 닫은 브라우저 탭 복원 (Ctrl+Shift+T) */
+export function restoreClosedBrowserTab(): void {
+  const tab = state.closedBrowserTabs.pop();
+  if (!tab) return;
+  openBrowserPanel(tab.url);
 }
 
 // ── 네비게이션 ──

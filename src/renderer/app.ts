@@ -4,7 +4,7 @@
  */
 import { state, electronAPI, setRenderCallbacks } from './state';
 import { filterAvailableFonts } from './utils';
-import { applyTheme, applyBackgroundImage } from './themes';
+import { applyTheme, applyBackgroundImage, getThemeNames } from './themes';
 import {
   fitAllTerminals,
   fitAllTerminalsImmediate,
@@ -20,7 +20,14 @@ import { initKeyboardShortcuts, setToggleSidebarHandler } from './keyboard';
 import { startPolling } from './polling';
 import { restoreSession, initSessionListeners } from './session';
 import { initIpcCommands } from './ipc-commands';
+import { initAgentListeners } from './agent-indicator';
 import { createLogger } from './logger';
+import { setLocale, getSupportedLocales } from '../shared/i18n';
+// 로케일 등록 (import 시 자동 실행)
+import '../shared/locales/ko';
+import '../shared/locales/en';
+import '../shared/locales/ja';
+import '../shared/locales/zh';
 import type { AppSettings } from '../../shared/types';
 
 const log = createLogger('app');
@@ -112,12 +119,20 @@ async function initSettings(): Promise<void> {
 
   const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement | null;
   if (themeSelect) {
+    // 동적으로 모든 테마 옵션을 채운다
+    themeSelect.innerHTML = '';
+    for (const name of getThemeNames()) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      themeSelect.appendChild(opt);
+    }
     themeSelect.value = state.settings?.theme || 'dark';
     applyTheme(themeSelect.value);
     themeSelect.addEventListener('change', () => {
       const theme = themeSelect.value;
       if (!state.settings) state.settings = {} as AppSettings;
-      state.settings.theme = theme as AppSettings['theme'];
+      state.settings.theme = theme;
       electronAPI.invoke('settings:set', { theme });
       applyTheme(theme);
     });
@@ -167,6 +182,30 @@ async function initSettings(): Promise<void> {
       if (!state.settings) state.settings = {} as AppSettings;
       state.settings.defaultShell = shellSelect.value;
       electronAPI.invoke('settings:set', { defaultShell: shellSelect.value });
+    });
+  }
+
+  // 언어 설정
+  const savedLang = state.settings?.language || 'ko';
+  setLocale(savedLang);
+
+  const langSelect = document.getElementById('setting-language') as HTMLSelectElement | null;
+  if (langSelect) {
+    // 지원 언어 옵션 동적 생성
+    langSelect.innerHTML = '';
+    for (const loc of getSupportedLocales()) {
+      const opt = document.createElement('option');
+      opt.value = loc.code;
+      opt.textContent = loc.name;
+      langSelect.appendChild(opt);
+    }
+    langSelect.value = savedLang;
+    langSelect.addEventListener('change', () => {
+      const lang = langSelect.value;
+      setLocale(lang);
+      if (!state.settings) state.settings = {} as AppSettings;
+      state.settings.language = lang;
+      electronAPI.invoke('settings:set', { language: lang });
     });
   }
 }
@@ -253,6 +292,7 @@ async function init(): Promise<void> {
   initSessionListeners();
   initNotificationListeners();
   initChildDetectListener();
+  initAgentListeners();
 
   await initSettings();
 

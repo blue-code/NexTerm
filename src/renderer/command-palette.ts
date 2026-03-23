@@ -8,6 +8,9 @@ import {
   splitPanel,
   closePanel,
   openBrowserPanel,
+  openMarkdownPanel,
+  restoreClosedBrowserTab,
+  togglePanelZoom,
   getActiveWorkspace,
   cycleWorkspace,
   focusAdjacentPanel,
@@ -39,6 +42,14 @@ export const commands: Command[] = [
   { id: 'focus-prev', label: '이전 패널로 이동', shortcut: 'Ctrl+[', action: () => focusAdjacentPanel(-1) },
   { id: 'next-workspace', label: '다음 워크스페이스', shortcut: 'Ctrl+Tab', action: () => cycleWorkspace(1) },
   { id: 'prev-workspace', label: '이전 워크스페이스', shortcut: 'Ctrl+Shift+Tab', action: () => cycleWorkspace(-1) },
+  { id: 'restore-tab', label: '닫은 브라우저 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreClosedBrowserTab() },
+  { id: 'zoom-panel', label: '패널 줌/최대화 토글', shortcut: 'Ctrl+Shift+Z', action: () => togglePanelZoom() },
+  { id: 'open-markdown', label: '마크다운 파일 열기', shortcut: '', action: async () => {
+    const filePath = await import('./state').then(m => m.electronAPI.invoke('dialog:open-file', {
+      filters: [{ name: '마크다운', extensions: ['md', 'markdown', 'txt'] }],
+    })) as string | null;
+    if (filePath) openMarkdownPanel(filePath);
+  }},
 ];
 
 // 사이드바 토글 함수 참조 (순환 의존성 방지)

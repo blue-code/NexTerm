@@ -15,6 +15,9 @@ import {
 import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, fitTerminal, terminalPool } from './terminal';
 import { toggleTerminalSearch } from './search';
 import type { SplitNode, SplitBranch } from './layout';
+import { getWorkspaceAgentStatus } from './agent-indicator';
+import { createOmnibar } from './omnibar';
+import { createMarkdownViewer } from './markdown-viewer';
 import type { PanelState, AppNotification } from '../../shared/types';
 import type { RuntimeWorkspace } from './state';
 
@@ -43,10 +46,33 @@ export function renderSidebar(): void {
       metaHtml += `<span class="tab-ports">:${escapeHtml(ws.listeningPorts.join(', :'))}</span>`;
     }
 
+    // AI 에이전트 상태 표시
+    const agentStatus = getWorkspaceAgentStatus(ws.id);
+    let agentStatusHtml = '';
+    if (agentStatus.hasCompleted) {
+      tab.classList.add('agent-done');
+      agentStatusHtml = `<div class="tab-agent-status tab-agent-status-completed">
+        <span class="agent-status-dot completed"></span>
+        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 완료</span>
+      </div>`;
+    } else if (agentStatus.hasActive) {
+      tab.classList.add('agent-working');
+      agentStatusHtml = `<div class="tab-agent-status tab-agent-status-active">
+        <span class="agent-status-dot active"></span>
+        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 작업 중</span>
+      </div>`;
+    }
+
     tab.innerHTML = `
       <div class="tab-name">${escapeHtml(ws.name)}</div>
       ${metaHtml ? `<div class="tab-meta">${metaHtml}</div>` : ''}
+      ${agentStatusHtml}
     `;
+
+    // 워크스페이스 색상 적용
+    if (ws.color) {
+      tab.style.borderLeft = `3px solid ${ws.color}`;
+    }
 
     tab.addEventListener('click', () => selectWorkspace(ws.id));
     tab.addEventListener('contextmenu', (e) => {
@@ -82,14 +108,30 @@ export function renderWorkspaceContent(): void {
     return;
   }
 
-  const element = renderSplitNode(ws.splitLayout, ws);
-  container.appendChild(element);
+  // 줌 모드: 특정 패널만 전체 크기로 표시
+  if (state.zoomedPanelId) {
+    const zoomedPanel = ws.panels.find((p: PanelState) => p.id === state.zoomedPanelId);
+    if (zoomedPanel) {
+      const element = renderPanel(zoomedPanel);
+      element.style.width = '100%';
+      element.style.height = '100%';
+      container.appendChild(element);
+    } else {
+      // 줌된 패널이 없으면 줌 해제
+      state.zoomedPanelId = null;
+      const element = renderSplitNode(ws.splitLayout, ws);
+      container.appendChild(element);
+    }
+  } else {
+    const element = renderSplitNode(ws.splitLayout, ws);
+    container.appendChild(element);
+  }
 
   // 터미널 마운트: 스크롤 위치를 보존하면서 DOM에 재배치
   requestAnimationFrame(() => {
     for (const panel of ws.panels) {
       if (panel.type === 'terminal') {
-        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand);
+        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback);
         const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
         if (mount && inst.container) {
           // 마운트 전 스크롤 상태 저장
@@ -162,7 +204,7 @@ function renderPanel(panel: PanelState): HTMLElement {
   pane.className = `split-pane ${panel.id === state.focusedPanelId ? 'focused' : 'unfocused'}`;
   pane.dataset.panelId = panel.id;
 
-  pane.addEventListener('mousedown', () => {
+  const focusPanel = () => {
     state.focusedPanelId = panel.id;
     const ws = getActiveWorkspace();
     if (ws) ws.activePanelId = panel.id;
@@ -171,6 +213,18 @@ function renderPanel(panel: PanelState): HTMLElement {
       el.classList.toggle('focused', el.dataset.panelId === panel.id);
       el.classList.toggle('unfocused', el.dataset.panelId !== panel.id);
     });
+  };
+
+  pane.addEventListener('mousedown', focusPanel);
+
+  // Focus-follows-mouse: 마우스 hover 시 자동 포커스
+  pane.addEventListener('mouseenter', () => {
+    if (state.focusFollowsMouse) {
+      focusPanel();
+      // 터미널 패널이면 터미널에 포커스
+      const inst = state.terminalInstances.get(panel.id);
+      if (inst) inst.terminal.focus();
+    }
   });
 
   const header = document.createElement('div');
@@ -178,6 +232,9 @@ function renderPanel(panel: PanelState): HTMLElement {
 
   const typeIcons: Record<string, string> = { terminal: '▸', browser: '◎', markdown: '¶' };
   const typeLabels: Record<string, string> = { terminal: '터미널', browser: '브라우저', markdown: '마크다운' };
+
+  // Vim 모드 배지: 터미널 제목에 vim/nvim이 포함되면 표시
+  const isVimActive = panel.type === 'terminal' && panel.title && /\b(n?vim)\b/i.test(panel.title);
 
   const panelLabel = (() => {
     if (panel.type === 'terminal') {
@@ -194,6 +251,7 @@ function renderPanel(panel: PanelState): HTMLElement {
     <div class="panel-title">
       <span class="panel-type-icon">${typeIcons[panel.type]}</span>
       <span class="panel-title-text">${escapeHtml(panelLabel)}</span>
+      ${isVimActive ? '<span class="vim-badge">VIM</span>' : ''}
     </div>
     <div class="panel-actions">
       ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="search" title="검색 (Ctrl+F)">⌕</button>' : ''}
@@ -229,6 +287,8 @@ function renderPanel(panel: PanelState): HTMLElement {
     pane.appendChild(mount);
   } else if (panel.type === 'browser') {
     renderBrowserContent(pane, panel);
+  } else if (panel.type === 'markdown' && panel.filePath) {
+    createMarkdownViewer(pane, panel.id, panel.filePath);
   }
 
   return pane;
@@ -240,25 +300,53 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
 
   const toolbar = document.createElement('div');
   toolbar.className = 'browser-toolbar';
-  toolbar.innerHTML = `
+
+  // 네비게이션 버튼
+  const navBtns = document.createElement('div');
+  navBtns.className = 'browser-nav-btns';
+  navBtns.innerHTML = `
     <button class="nav-btn" data-nav="back" title="뒤로">◀</button>
     <button class="nav-btn" data-nav="forward" title="앞으로">▶</button>
     <button class="nav-btn" data-nav="reload" title="새로고침">↻</button>
-    <input type="text" class="url-input" value="${escapeHtml(panel.url || '')}" placeholder="URL 입력...">
   `;
+  toolbar.appendChild(navBtns);
 
+  // Omnibar (히스토리 자동완성 + 검색엔진 통합)
   const webview = document.createElement('webview') as HTMLElement & {
     src: string;
     goBack(): void;
     goForward(): void;
     reload(): void;
     getTitle(): string;
+    openDevTools(): void;
+    findInPage(text: string, opts?: { forward?: boolean }): void;
+    stopFindInPage(action: string): void;
   };
+
+  const omnibar = createOmnibar(toolbar, panel.url || '', (url) => {
+    webview.src = url;
+  });
+
+  // 도구 버튼 (Find-in-page, DevTools)
+  const toolBtns = document.createElement('div');
+  toolBtns.className = 'browser-tool-btns';
+  toolBtns.innerHTML = `
+    <button class="nav-btn" data-action="find" title="페이지 내 검색 (Ctrl+F)">⌕</button>
+    <button class="nav-btn" data-action="devtools" title="개발자 도구">⚙</button>
+  `;
+  toolbar.appendChild(toolBtns);
+
+  // webview 설정
   webview.className = 'browser-webview';
   webview.setAttribute('src', panel.url || 'https://www.google.com');
   webview.setAttribute('allowpopups', '');
 
-  toolbar.querySelectorAll('.nav-btn').forEach((btn) => {
+  // 브라우저 프로필 (partition으로 데이터 격리)
+  const profile = panel.browserProfile || 'default';
+  webview.setAttribute('partition', `persist:browser-${profile}`);
+
+  // 네비게이션 버튼 이벤트
+  navBtns.querySelectorAll('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const nav = (btn as HTMLElement).dataset.nav;
       if (nav === 'back') webview.goBack();
@@ -267,24 +355,79 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
     });
   });
 
-  const urlInput = toolbar.querySelector('.url-input') as HTMLInputElement;
-  urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      let url = urlInput.value.trim();
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      webview.src = url;
-    }
-  });
-
+  // URL 변경 시 Omnibar 갱신 + 히스토리 기록
   webview.addEventListener('did-navigate', ((e: CustomEvent) => {
-    urlInput.value = (e as any).url;
-    panel.url = (e as any).url;
-    panel.title = webview.getTitle() || '브라우저';
+    const url = (e as any).url as string;
+    omnibar.updateUrl(url);
+    panel.url = url;
+    const title = webview.getTitle() || '브라우저';
+    panel.title = title;
+    // 히스토리 기록 (about:blank 등 제외)
+    if (url && !url.startsWith('about:')) {
+      import('./state').then(({ electronAPI }) => {
+        electronAPI.send('browser:history-add', { url, title });
+      });
+    }
   }) as EventListener);
 
+  webview.addEventListener('did-navigate-in-page', ((e: CustomEvent) => {
+    const url = (e as any).url as string;
+    if (url) omnibar.updateUrl(url);
+  }) as EventListener);
+
+  // Find-in-page 오버레이
+  const findOverlay = document.createElement('div');
+  findOverlay.className = 'browser-find-overlay hidden';
+  findOverlay.innerHTML = `
+    <input type="text" class="browser-find-input" placeholder="페이지에서 찾기...">
+    <button class="nav-btn find-prev" title="이전">▲</button>
+    <button class="nav-btn find-next" title="다음">▼</button>
+    <button class="nav-btn find-close" title="닫기">✕</button>
+  `;
+
+  const findInput = findOverlay.querySelector('.browser-find-input') as HTMLInputElement;
+  findInput.addEventListener('input', () => {
+    const text = findInput.value;
+    if (text) webview.findInPage(text);
+    else webview.stopFindInPage('clearSelection');
+  });
+  findInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      webview.findInPage(findInput.value, { forward: !e.shiftKey });
+    } else if (e.key === 'Escape') {
+      webview.stopFindInPage('clearSelection');
+      findOverlay.classList.add('hidden');
+    }
+  });
+  findOverlay.querySelector('.find-prev')?.addEventListener('click', () => {
+    webview.findInPage(findInput.value, { forward: false });
+  });
+  findOverlay.querySelector('.find-next')?.addEventListener('click', () => {
+    webview.findInPage(findInput.value, { forward: true });
+  });
+  findOverlay.querySelector('.find-close')?.addEventListener('click', () => {
+    webview.stopFindInPage('clearSelection');
+    findOverlay.classList.add('hidden');
+  });
+
+  // 도구 버튼 이벤트
+  toolBtns.querySelectorAll('.nav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = (btn as HTMLElement).dataset.action;
+      if (action === 'find') {
+        findOverlay.classList.toggle('hidden');
+        if (!findOverlay.classList.contains('hidden')) {
+          findInput.focus();
+          findInput.select();
+        }
+      } else if (action === 'devtools') {
+        webview.openDevTools();
+      }
+    });
+  });
+
   browserPanel.appendChild(toolbar);
+  browserPanel.appendChild(findOverlay);
   browserPanel.appendChild(webview);
   pane.appendChild(browserPanel);
 }
@@ -362,6 +505,7 @@ function showWorkspaceContextMenu(workspaceId: string, x: number, y: number): vo
 
   const items = [
     { label: '이름 변경', action: () => promptRenameWorkspace(workspaceId) },
+    { label: '색상 설정', action: () => promptWorkspaceColor(workspaceId) },
     { label: '새 터미널 분할', action: () => { selectWorkspace(workspaceId); splitPanel('horizontal'); } },
     { label: '브라우저 열기', action: () => { selectWorkspace(workspaceId); openBrowserPanel(); } },
     { label: '닫기', action: () => closeWorkspace(workspaceId) },
@@ -411,4 +555,56 @@ export function promptRenameWorkspace(wsId?: string): void {
     }
   };
   input.addEventListener('keydown', handler);
+}
+
+/** 워크스페이스 색상 설정 (색상 피커 팝업) */
+function promptWorkspaceColor(wsId: string): void {
+  const ws = state.workspaces.find(w => w.id === wsId);
+  if (!ws) return;
+
+  const presetColors = [
+    '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7',
+    '#7dcfff', '#ff9e64', '#f5c2e7', '#a6e3a1', '#fab387',
+    '', // 색상 없음 (제거)
+  ];
+
+  // 간단한 색상 선택 팝업
+  const popup = document.createElement('div');
+  popup.className = 'color-picker-popup';
+  popup.style.cssText = `
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 2000; background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  `;
+
+  popup.innerHTML = `
+    <div style="font-size:13px;margin-bottom:12px;color:var(--text-secondary)">워크스페이스 색상</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;max-width:220px"></div>
+  `;
+
+  const grid = popup.querySelector('div:last-child')!;
+  for (const color of presetColors) {
+    const swatch = document.createElement('div');
+    swatch.style.cssText = `
+      width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
+      border: 2px solid ${ws.color === color ? 'var(--accent)' : 'transparent'};
+      ${color ? `background: ${color}` : 'background: var(--bg-tertiary); display:flex; align-items:center; justify-content:center; font-size:14px;'}
+    `;
+    if (!color) swatch.textContent = '✕';
+
+    swatch.addEventListener('click', () => {
+      ws.color = color || undefined;
+      renderSidebar();
+      popup.remove();
+      backdrop.remove();
+    });
+    grid.appendChild(swatch);
+  }
+
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:1999;';
+  backdrop.addEventListener('click', () => { popup.remove(); backdrop.remove(); });
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(popup);
 }

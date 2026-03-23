@@ -15,6 +15,14 @@ const ALLOWED_INVOKE = new Set([
   'settings:set',
   'session:restore',
   'dialog:open-file',
+  'agent:get-status',
+  'browser:history-search',
+  'browser:history-list',
+  'file:read',
+  'file:watch',
+  'file:unwatch',
+  'keybindings:get',
+  'keybindings:set',
 ]);
 
 const ALLOWED_SEND = new Set([
@@ -26,6 +34,7 @@ const ALLOWED_SEND = new Set([
   'window:minimize',
   'window:maximize',
   'window:close',
+  'browser:history-add',
 ]);
 
 const ALLOWED_ON = new Set([
@@ -36,6 +45,8 @@ const ALLOWED_ON = new Set([
   'ipc:command',
   'notification:clicked',
   'settings:changed',
+  'agent:status-changed',
+  'file:changed',
 ]);
 
 // ── contextBridge로 안전한 API만 노출 ──

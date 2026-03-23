@@ -3,6 +3,7 @@
 export interface WorkspaceState {
   id: string;
   name: string;
+  color?: string; // 워크스페이스 색상 (CSS 색상값)
   panels: PanelState[];
   splitLayout: SplitNode;
   activePanelId: string | null;
@@ -26,8 +27,12 @@ export interface PanelState {
   scrollback?: string;
   shell?: string;
   shellCommand?: string;
+  // AI 에이전트 상태 (런타임)
+  agentStatus?: import('./agent-types').AgentStatus;
+  agentName?: string;
   // 브라우저 패널용
   url?: string;
+  browserProfile?: string; // partition 이름 (기본: 'default')
   // 마크다운 패널용
   filePath?: string;
 }
@@ -78,14 +83,16 @@ export interface AppSettings {
   fontFamily: string;
   fontSize: number;
   scrollbackLimit: number;
-  theme: 'dark' | 'light' | 'sakura' | 'monokai' | 'nord' | 'solarized';
+  theme: string; // 기본 6종 + 확장 테마 이름
   backgroundImage: string; // 배경 이미지 경로 (빈 문자열이면 비활성)
   sidebarWidth: number;
   unfocusedPanelOpacity: number;
   notificationSound: boolean;
   sessionRestoreEnabled: boolean;
-  socketControlMode: 'off' | 'nextermOnly' | 'allowAll';
+  socketControlMode: 'off' | 'nextermOnly' | 'automation' | 'password' | 'allowAll';
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
+  externalUrlPatterns: string[]; // 외부 브라우저로 열 URL 패턴 (glob 형태)
+  language: string; // UI 언어 (ko, en, ja, zh)
 }
 
 // IPC 메시지 타입
@@ -146,8 +153,28 @@ export const IPC_CHANNELS = {
   SESSION_SAVE: 'session:save',
   SESSION_RESTORE: 'session:restore',
 
-  // 앱
+  // 앱 / 윈도우
   APP_READY: 'app:ready',
+  WINDOW_NEW: 'window:new',
+
+  // AI 에이전트
+  AGENT_STATUS_CHANGED: 'agent:status-changed',
+  AGENT_GET_STATUS: 'agent:get-status',
+
+  // 브라우저 히스토리
+  BROWSER_HISTORY_ADD: 'browser:history-add',
+  BROWSER_HISTORY_SEARCH: 'browser:history-search',
+  BROWSER_HISTORY_LIST: 'browser:history-list',
+
+  // 키바인딩
+  KEYBINDINGS_GET: 'keybindings:get',
+  KEYBINDINGS_SET: 'keybindings:set',
+
+  // 파일 (마크다운 뷰어 등)
+  FILE_READ: 'file:read',
+  FILE_WATCH: 'file:watch',
+  FILE_UNWATCH: 'file:unwatch',
+  FILE_CHANGED: 'file:changed',
 } as const;
 
 // ── preload 브릿지 API 타입 ──
@@ -169,6 +196,14 @@ export interface ElectronAPI {
 export interface IpcCommandPayload {
   method: string;
   params: Record<string, unknown>;
+}
+
+// 브라우저 히스토리 항목
+export interface BrowserHistoryEntry {
+  url: string;
+  title: string;
+  visitCount: number;
+  lastVisitedAt: number;
 }
 
 // Git 상태 조회 결과

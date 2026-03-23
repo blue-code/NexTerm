@@ -492,6 +492,7 @@ body {
   flex-direction: column;
   width: 100%;
   height: calc(100% - 28px);
+  position: relative;
 }
 
 .browser-toolbar {
@@ -503,6 +504,13 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.browser-nav-btns,
+.browser-tool-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .browser-toolbar .nav-btn {
   width: 28px;
   height: 28px;
@@ -512,6 +520,7 @@ body {
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .browser-toolbar .nav-btn:hover {
@@ -519,8 +528,15 @@ body {
   color: var(--text-primary);
 }
 
-.browser-toolbar .url-input {
+/* Omnibar */
+.omnibar-wrapper {
   flex: 1;
+  position: relative;
+  margin: 0 4px;
+}
+
+.omnibar-input {
+  width: 100%;
   height: 28px;
   padding: 0 10px;
   background: var(--bg-primary);
@@ -530,9 +546,86 @@ body {
   font-family: var(--font-mono);
   font-size: 12px;
   outline: none;
+  box-sizing: border-box;
 }
 
-.browser-toolbar .url-input:focus {
+.omnibar-input:focus {
+  border-color: var(--accent);
+}
+
+.omnibar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 1500;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.omnibar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  gap: 8px;
+}
+
+.omnibar-item:hover,
+.omnibar-item.selected {
+  background: var(--bg-hover);
+}
+
+.omnibar-item-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.omnibar-item-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Find-in-page 오버레이 */
+.browser-find-overlay {
+  position: absolute;
+  top: 40px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 1200;
+}
+
+.browser-find-input {
+  width: 200px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.browser-find-input:focus {
   border-color: var(--accent);
 }
 
@@ -542,7 +635,8 @@ body {
 }
 
 /* ── 마크다운 패널 ── */
-.markdown-container {
+.markdown-container,
+.markdown-viewer {
   width: 100%;
   height: calc(100% - 28px);
   padding: 16px 24px;
@@ -553,13 +647,15 @@ body {
   color: var(--text-primary);
 }
 
-.markdown-container h1, .markdown-container h2, .markdown-container h3 {
+.markdown-container h1, .markdown-container h2, .markdown-container h3,
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
   color: var(--accent);
   margin-top: 1em;
   margin-bottom: 0.5em;
 }
 
-.markdown-container code {
+.markdown-container code,
+.markdown-content code {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 6px;
@@ -567,11 +663,62 @@ body {
   font-size: 13px;
 }
 
-.markdown-container pre {
+.markdown-container pre,
+.markdown-content pre {
   background: var(--bg-secondary);
   padding: 12px;
   border-radius: 6px;
   overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.markdown-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  border-radius: 4px;
 }
 
 /* ── 알림 페이지 ── */
@@ -971,4 +1118,168 @@ select.setting-input option {
   color: var(--text-muted);
   min-width: 40px;
   text-align: center;
+}
+
+/* ── AI 에이전트 인디케이터 ── */
+
+/* ── 워크스페이스 탭 에이전트 상태 표시 ── */
+
+/* 작업 중인 탭: 좌측 보더 + 배경 글로우 */
+.workspace-tab.agent-working {
+  border-left-color: #9ece6a;
+  background: rgba(158, 206, 106, 0.06);
+}
+
+.workspace-tab.agent-working:not(.active) {
+  border-left-color: #9ece6a;
+}
+
+/* 작업 완료 탭: 파란 보더 + 배경 글로우 */
+.workspace-tab.agent-done {
+  border-left-color: #7aa2f7;
+  background: rgba(122, 162, 247, 0.06);
+}
+
+.workspace-tab.agent-done:not(.active) {
+  border-left-color: #7aa2f7;
+}
+
+/* 에이전트 상태 표시줄 (탭 내부) */
+.tab-agent-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tab-agent-status-active {
+  background: rgba(158, 206, 106, 0.12);
+  color: #9ece6a;
+}
+
+.tab-agent-status-completed {
+  background: rgba(122, 162, 247, 0.12);
+  color: #7aa2f7;
+}
+
+/* 상태 점 (dot) */
+.agent-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-status-dot.active {
+  background: #9ece6a;
+  animation: agent-dot-pulse 1.5s ease-in-out infinite;
+}
+
+.agent-status-dot.completed {
+  background: #7aa2f7;
+  animation: agent-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agent-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.agent-status-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 패널 헤더 에이전트 배지 */
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.agent-badge.agent-active {
+  background: rgba(158, 206, 106, 0.15);
+  color: #9ece6a;
+  border: 1px solid rgba(158, 206, 106, 0.3);
+}
+
+.agent-badge.agent-completed {
+  background: rgba(122, 162, 247, 0.15);
+  color: #7aa2f7;
+  border: 1px solid rgba(122, 162, 247, 0.3);
+  animation: agent-pulse 1.5s ease-in-out infinite;
+}
+
+/* 패널 보더 효과 — 에이전트 활성 */
+.split-pane.agent-active {
+  box-shadow: inset 0 0 0 1px rgba(158, 206, 106, 0.3);
+}
+
+/* 패널 보더 효과 — 에이전트 완료 (파란 링) */
+.split-pane.agent-completed {
+  box-shadow: inset 0 0 0 2px rgba(122, 162, 247, 0.5);
+  animation: agent-border-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agent-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes agent-border-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(122, 162, 247, 0.5); }
+  50% { box-shadow: inset 0 0 0 2px rgba(122, 162, 247, 0.2); }
+}
+
+/* ── Vim 모드 인디케이터 ── */
+
+.vim-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(158, 206, 106, 0.2);
+  color: #9ece6a;
+  border: 1px solid rgba(158, 206, 106, 0.3);
+}
+
+/* ── 프레젠테이션 모드 ── */
+
+body.presentation-mode #content {
+  top: 0;
+  left: 0;
+}
+
+body.presentation-mode #workspace-content {
+  height: 100vh;
+}
+
+/* ── 줌된 패널 ── */
+
+.split-pane.zoomed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
 }
