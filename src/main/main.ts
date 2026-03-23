@@ -1,6 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
+
+// Windows 콘솔 한글 출력을 위해 코드페이지를 UTF-8(65001)로 변경
+if (process.platform === 'win32') {
+  try { execSync('chcp 65001', { stdio: 'ignore' }); } catch {}
+}
 
 // 프로덕션/개발 환경 경로 해결
 // 개발: __dirname = <project>/dist/main/

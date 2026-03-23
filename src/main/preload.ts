@@ -3,6 +3,9 @@
  * 허용된 IPC 채널만 렌더러에 노출하여 보안을 강화한다.
  */
 import { contextBridge, ipcRenderer, clipboard } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 // ── 화이트리스트: 허용된 IPC 채널만 통과 ──
 
@@ -85,6 +88,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     writeText(text: string): void {
       clipboard.writeText(text);
+    },
+    /** 클립보드에 이미지가 있으면 임시 파일로 저장 후 경로 반환, 없으면 null */
+    saveImageToTemp(): string | null {
+      const img = clipboard.readImage();
+      if (img.isEmpty()) return null;
+      const buf = img.toPNG();
+      const tmpPath = path.join(os.tmpdir(), `nexterm-paste-${Date.now()}.png`);
+      fs.writeFileSync(tmpPath, buf);
+      return tmpPath;
     },
   },
 

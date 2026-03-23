@@ -49,17 +49,19 @@ export function renderSidebar(): void {
     // AI 에이전트 상태 표시
     const agentStatus = getWorkspaceAgentStatus(ws.id);
     let agentStatusHtml = '';
-    if (agentStatus.hasCompleted) {
-      tab.classList.add('agent-done');
-      agentStatusHtml = `<div class="tab-agent-status tab-agent-status-completed">
-        <span class="agent-status-dot completed"></span>
-        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 완료</span>
-      </div>`;
-    } else if (agentStatus.hasActive) {
+    if (agentStatus.hasActive) {
+      // 하나라도 작업 중이면 "작업 중" 우선 표시
       tab.classList.add('agent-working');
       agentStatusHtml = `<div class="tab-agent-status tab-agent-status-active">
         <span class="agent-status-dot active"></span>
         <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 작업 중</span>
+      </div>`;
+    } else if (agentStatus.hasCompleted) {
+      // 모든 에이전트가 완료된 경우에만 "완료" 표시
+      tab.classList.add('agent-done');
+      agentStatusHtml = `<div class="tab-agent-status tab-agent-status-completed">
+        <span class="agent-status-dot completed"></span>
+        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 완료</span>
       </div>`;
     }
 

@@ -6,7 +6,7 @@ import * as pty from 'node-pty';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { app } from 'electron';
 
 interface TerminalInstance {
@@ -96,13 +96,15 @@ export class TerminalService {
     const resolvedShell = this.resolveShell(shell);
 
     const env = { ...process.env } as Record<string, string>;
+    // Windows 레지스트리에서 최신 PATH를 읽어 반영 (앱 실행 후 PATH 변경 대응)
+    env['PATH'] = this.refreshWindowsPath();
     // NexTerm 환경 변수 주입 (에이전트가 CLI 사용 가능하도록)
     env['NEXTERM_PIPE'] = '\\\\.\\pipe\\nexterm-ipc';
     env['NEXTERM_PANEL_ID'] = id;
     env['TERM_PROGRAM'] = 'nexterm';
     // nt.cmd 등 헬퍼 스크립트를 PATH 선두에 추가
     if (this.binDir) {
-      env['PATH'] = this.binDir + ';' + (env['PATH'] || '');
+      env['PATH'] = this.binDir + ';' + env['PATH'];
     }
 
     // PowerShell인 경우 프롬프트에 OSC 2 시퀀스 주입 (CWD 실시간 추적용)
@@ -330,6 +332,29 @@ export class TerminalService {
     }
 
     return [];
+  }
+
+  /**
+   * Windows 레지스트리에서 최신 시스템+사용자 PATH를 읽어 반환
+   * Electron 앱 실행 후 PATH가 변경되어도 새 터미널에 즉시 반영된다.
+   */
+  private refreshWindowsPath(): string {
+    try {
+      const systemPath = execSync(
+        'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
+        { encoding: 'utf-8', timeout: 3000 },
+      ).replace(/[\r\n]+/g, ' ').replace(/.*REG_(?:SZ|EXPAND_SZ)\s+/i, '').trim();
+
+      const userPath = execSync(
+        'reg query "HKCU\\Environment" /v Path',
+        { encoding: 'utf-8', timeout: 3000 },
+      ).replace(/[\r\n]+/g, ' ').replace(/.*REG_(?:SZ|EXPAND_SZ)\s+/i, '').trim();
+
+      return `${userPath};${systemPath}`;
+    } catch {
+      // 레지스트리 조회 실패 시 기존 process.env.PATH 사용
+      return process.env.PATH || '';
+    }
   }
 
   /** Windows에서 사용 가능한 셸 경로 결정 */

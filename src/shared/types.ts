@@ -186,6 +186,7 @@ export interface ElectronAPI {
   clipboard: {
     readText(): string;
     writeText(text: string): void;
+    saveImageToTemp(): string | null;
   };
   env: {
     USERPROFILE: string;

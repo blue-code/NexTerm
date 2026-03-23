@@ -50,6 +50,7 @@ export class WindowManagerService {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: false,
         preload: opts.preloadPath,
         webviewTag: true,
       },

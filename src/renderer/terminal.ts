@@ -82,11 +82,18 @@ export function createTerminalInstance(
       return true; // SIGINT 전달
     }
 
-    // Ctrl+V: 붙여넣기
+    // Ctrl+V: 붙여넣기 (텍스트 우선, 없으면 이미지 → 임시 파일 경로 삽입)
     if (ctrl && key.toLowerCase() === 'v') {
       const text = electronAPI.clipboard.readText();
       if (text) {
         terminal.paste(text);
+      } else {
+        // 텍스트가 없으면 클립보드 이미지를 임시 파일로 저장 후 경로 삽입
+        const imgPath = electronAPI.clipboard.saveImageToTemp();
+        if (imgPath) {
+          // 공백 포함 경로 대비 따옴표로 감싸기
+          terminal.paste(`"${imgPath}"`);
+        }
       }
       return false;
     }
@@ -97,9 +104,41 @@ export function createTerminalInstance(
     return true;
   });
 
+  // 파일 드래그 앤 드롭 → 파일 경로 삽입
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    container.classList.add('drag-over');
+  });
+
+  container.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    container.classList.remove('drag-over');
+  });
+
+  container.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    container.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    // 드롭된 파일 경로를 터미널에 삽입 (공백 포함 대비 따옴표)
+    const paths = Array.from(files)
+      .map((f: File & { path?: string }) => f.path ? `"${f.path}"` : '')
+      .filter(Boolean)
+      .join(' ');
+    if (paths) {
+      terminal.paste(paths);
+      terminal.focus();
+    }
+  });
+
   // 세션 복원 시 저장된 스크롤백 기록
+  // xterm.js는 \n만으로는 커서가 다음 줄 시작으로 돌아가지 않으므로 \r\n으로 변환
   if (scrollback) {
-    terminal.write(scrollback + '\r\n');
+    terminal.write(scrollback.replace(/\r?\n/g, '\r\n') + '\r\n');
   }
 
   // 메인 프로세스에 터미널 생성 요청
@@ -273,8 +312,8 @@ export function writeScrollbackToTerminal(panelId: string, scrollback: string): 
   const inst = state.terminalInstances.get(panelId);
   if (!inst || !scrollback) return;
 
-  // 줄 단위로 기록 (ANSI 이스케이프 포함된 텍스트 그대로)
-  inst.terminal.write(scrollback + '\r\n');
+  // xterm.js는 \n만으로 커서 복귀 안 함 → \r\n으로 변환하여 기록
+  inst.terminal.write(scrollback.replace(/\r?\n/g, '\r\n') + '\r\n');
 }
 
 // ── IPC 이벤트 리스너 ──
