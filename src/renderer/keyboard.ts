@@ -19,7 +19,6 @@ import {
   focusAdjacentPanel,
 } from './workspace';
 import { toggleTerminalSearch } from './search';
-import { toggleNotifications } from './notifications';
 import { showCommandPalette } from './command-palette';
 
 import { fitAllTerminals } from './terminal';
@@ -70,7 +69,6 @@ const ACTION_HANDLERS: Record<string, () => void> = {
   'focus-next': () => focusAdjacentPanel(1),
   'focus-prev': () => focusAdjacentPanel(-1),
   'restore-tab': () => restoreClosedBrowserTab(),
-  'notifications': () => toggleNotifications(),
   'zoom-panel': () => togglePanelZoom(),
   'presentation-mode': () => togglePresentation(),
 };
@@ -92,7 +90,6 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'focus-next': 'Ctrl+]',
   'focus-prev': 'Ctrl+[',
   'restore-tab': 'Ctrl+Shift+T',
-  'notifications': 'Ctrl+Shift+U',
   'zoom-panel': 'Ctrl+Shift+Z',
   'presentation-mode': 'Ctrl+Shift+F',
 };
@@ -185,7 +182,6 @@ export function getCurrentBindings(): Array<{ actionId: string; keys: string; la
     'focus-next': '다음 패널',
     'focus-prev': '이전 패널',
     'restore-tab': '닫은 탭 복원',
-    'notifications': '알림 보기',
   };
 
   const result: Array<{ actionId: string; keys: string; label: string }> = [];

@@ -12,7 +12,6 @@ export interface WorkspaceState {
   gitDirty?: boolean;
   prNumber?: number;
   listeningPorts: number[];
-  unreadNotifications: number;
   createdAt: number;
 }
 
@@ -52,16 +51,6 @@ export interface SplitLeaf {
   panelId: string;
 }
 
-export interface AppNotification {
-  id: string;
-  workspaceId: string;
-  panelId: string;
-  title: string;
-  body: string;
-  timestamp: number;
-  read: boolean;
-}
-
 export interface SessionSnapshot {
   version: 1;
   windowBounds: { x: number; y: number; width: number; height: number };
@@ -87,7 +76,6 @@ export interface AppSettings {
   backgroundImage: string; // 배경 이미지 경로 (빈 문자열이면 비활성)
   sidebarWidth: number;
   unfocusedPanelOpacity: number;
-  notificationSound: boolean;
   sessionRestoreEnabled: boolean;
   socketControlMode: 'off' | 'nextermOnly' | 'automation' | 'password' | 'allowAll';
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
@@ -133,11 +121,6 @@ export const IPC_CHANNELS = {
   // 브라우저
   BROWSER_OPEN: 'browser:open',
   BROWSER_NAVIGATE: 'browser:navigate',
-
-  // 알림
-  NOTIFICATION_SEND: 'notification:send',
-  NOTIFICATION_READ: 'notification:read',
-  NOTIFICATION_LIST: 'notification:list',
 
   // Git
   GIT_STATUS: 'git:status',

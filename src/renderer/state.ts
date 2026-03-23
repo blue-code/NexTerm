@@ -7,7 +7,6 @@ import type {
   ElectronAPI,
   WorkspaceState,
   PanelState,
-  AppNotification,
   AppSettings,
 } from '../../shared/types';
 import type { AgentInfo } from '../../shared/agent-types';
@@ -60,7 +59,6 @@ export interface RuntimeWorkspace extends Omit<WorkspaceState, 'gitBranch' | 'gi
 export const state = {
   workspaces: [] as RuntimeWorkspace[],
   activeWorkspaceId: null as string | null,
-  notifications: [] as AppNotification[],
   settings: null as AppSettings | null,
   sidebarWidth: 240,
   sidebarVisible: true,

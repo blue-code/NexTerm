@@ -27,7 +27,6 @@ export function createWorkspace(name?: string, cwd?: string): RuntimeWorkspace {
     gitDirty: false,
     prNumber: null,
     listeningPorts: [],
-    unreadNotifications: 0,
     createdAt: Date.now(),
   };
   state.workspaces.push(workspace);

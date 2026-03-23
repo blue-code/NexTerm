@@ -9,7 +9,6 @@ import {
   splitPanel,
   openBrowserPanel,
 } from './workspace';
-import { addNotification } from './notifications';
 import type { IpcCommandPayload } from '../../shared/types';
 
 let removeIpcCommand: (() => void) | null = null;
@@ -36,14 +35,6 @@ export function initIpcCommands(): void {
         break;
       case 'open-browser':
         openBrowserPanel(params?.url as string | undefined);
-        break;
-      case 'notify':
-        addNotification(
-          (params?.title as string) || 'NexTerm',
-          (params?.body as string) || '',
-          params?.workspaceId as string | undefined,
-          params?.panelId as string | undefined,
-        );
         break;
       case 'send':
         if (params?.panelId && params?.text) {

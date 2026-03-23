@@ -30,9 +30,6 @@
       </div>
       <div id="workspace-list"></div>
       <div id="sidebar-footer">
-        <button id="btn-notifications" class="icon-btn" title="알림">
-          🔔 <span id="notification-badge" class="badge hidden">0</span>
-        </button>
         <button id="btn-shortcuts" class="icon-btn" title="단축키">⌨</button>
         <button id="btn-settings" class="icon-btn" title="설정">⚙</button>
       </div>
@@ -68,7 +65,7 @@
             <div class="shortcut-row"><span>Toggle sidebar</span><kbd>Ctrl+B</kbd></div>
             <div class="shortcut-row"><span>Open browser</span><kbd>Ctrl+Shift+B</kbd></div>
             <div class="shortcut-row"><span>Terminal search</span><kbd>Ctrl+F</kbd></div>
-            <div class="shortcut-row"><span>Notifications</span><kbd>Ctrl+Shift+U</kbd></div>
+
           </div>
         </div>
       </div>
@@ -82,14 +79,6 @@
       <!-- 워크스페이스 콘텐츠 (분할 패널) -->
       <div id="workspace-content"></div>
 
-      <!-- 알림 페이지 (토글) -->
-      <div id="notifications-page" class="hidden">
-        <div class="page-header">
-          <h2>알림</h2>
-          <button id="btn-mark-all-read" class="text-btn">모두 읽음</button>
-        </div>
-        <div id="notification-list"></div>
-      </div>
     </div>
   </div>
 
@@ -168,10 +157,6 @@
             <input type="text" id="setting-bg-image" class="setting-input" placeholder="이미지 경로 (비우면 해제)" style="flex:1">
             <button id="btn-bg-image-browse" class="text-btn" style="white-space:nowrap">찾기...</button>
           </div>
-        </div>
-        <div class="setting-group">
-          <label>알림 사운드</label>
-          <input type="checkbox" id="setting-notification-sound">
         </div>
         <div class="setting-group">
           <label>언어 (Language)</label>

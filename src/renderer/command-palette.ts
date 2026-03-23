@@ -17,7 +17,6 @@ import {
 } from './workspace';
 import { state } from './state';
 import { toggleTerminalSearch } from './search';
-import { toggleNotifications } from './notifications';
 import { promptRenameWorkspace } from './render';
 
 interface Command {
@@ -37,7 +36,6 @@ export const commands: Command[] = [
   { id: 'open-browser', label: '브라우저 열기', shortcut: 'Ctrl+Shift+B', action: () => openBrowserPanel() },
   { id: 'toggle-sidebar', label: '사이드바 토글', shortcut: 'Ctrl+B', action: () => toggleSidebarFn?.() },
   { id: 'terminal-search', label: '터미널 내 검색', shortcut: 'Ctrl+F', action: () => { if (state.focusedPanelId) toggleTerminalSearch(state.focusedPanelId); } },
-  { id: 'notifications', label: '알림 보기', shortcut: 'Ctrl+Shift+U', action: toggleNotifications },
   { id: 'focus-next', label: '다음 패널로 이동', shortcut: 'Ctrl+]', action: () => focusAdjacentPanel(1) },
   { id: 'focus-prev', label: '이전 패널로 이동', shortcut: 'Ctrl+[', action: () => focusAdjacentPanel(-1) },
   { id: 'next-workspace', label: '다음 워크스페이스', shortcut: 'Ctrl+Tab', action: () => cycleWorkspace(1) },

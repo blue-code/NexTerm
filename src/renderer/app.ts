@@ -15,7 +15,6 @@ import {
 import { createWorkspace, initChildDetectListener } from './workspace';
 import { renderSidebar, renderWorkspaceContent } from './render';
 import { initCommandPaletteEvents, setToggleSidebar } from './command-palette';
-import { toggleNotifications, renderNotifications, initNotificationListeners } from './notifications';
 import { initKeyboardShortcuts, setToggleSidebarHandler } from './keyboard';
 import { startPolling } from './polling';
 import { restoreSession, initSessionListeners } from './session';
@@ -163,16 +162,6 @@ async function initSettings(): Promise<void> {
     });
   }
 
-  const notifSoundCheckbox = document.getElementById('setting-notification-sound') as HTMLInputElement | null;
-  if (notifSoundCheckbox) {
-    notifSoundCheckbox.checked = state.settings?.notificationSound !== false;
-    notifSoundCheckbox.addEventListener('change', () => {
-      if (!state.settings) state.settings = {} as AppSettings;
-      state.settings.notificationSound = notifSoundCheckbox.checked;
-      electronAPI.invoke('settings:set', { notificationSound: notifSoundCheckbox.checked });
-    });
-  }
-
   const shellSelect = document.getElementById('setting-shell') as HTMLSelectElement | null;
   if (shellSelect) {
     shellSelect.value = state.settings?.defaultShell || 'powershell.exe';
@@ -218,7 +207,6 @@ function initUIEvents(): void {
   document.getElementById('btn-close')?.addEventListener('click', () => electronAPI.send('window:close'));
 
   document.getElementById('btn-new-workspace')?.addEventListener('click', () => createWorkspace());
-  document.getElementById('btn-notifications')?.addEventListener('click', toggleNotifications);
   document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
     document.getElementById('shortcuts-dialog')?.classList.toggle('hidden');
   });
@@ -237,13 +225,6 @@ function initUIEvents(): void {
   });
   document.querySelector('#settings-dialog .dialog-backdrop')?.addEventListener('click', () => {
     document.getElementById('settings-dialog')?.classList.add('hidden');
-  });
-
-  document.getElementById('btn-mark-all-read')?.addEventListener('click', () => {
-    state.notifications.forEach(n => n.read = true);
-    state.workspaces.forEach(w => w.unreadNotifications = 0);
-    renderNotifications();
-    renderSidebar();
   });
 
   // 사이드바 리사이즈
@@ -290,7 +271,6 @@ async function init(): Promise<void> {
   // IPC 리스너 등록 (가장 먼저 — 메인 프로세스 메시지 수신 준비)
   initTerminalIpcListeners();
   initSessionListeners();
-  initNotificationListeners();
   initChildDetectListener();
   initAgentListeners();
 

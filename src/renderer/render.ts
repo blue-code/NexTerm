@@ -18,7 +18,7 @@ import type { SplitNode, SplitBranch } from './layout';
 import { getWorkspaceAgentStatus } from './agent-indicator';
 import { createOmnibar } from './omnibar';
 import { createMarkdownViewer } from './markdown-viewer';
-import type { PanelState, AppNotification } from '../../shared/types';
+import type { PanelState } from '../../shared/types';
 import type { RuntimeWorkspace } from './state';
 
 // ── 사이드바 ──
@@ -32,8 +32,6 @@ export function renderSidebar(): void {
   for (const ws of state.workspaces) {
     const tab = document.createElement('div');
     tab.className = `workspace-tab${ws.id === state.activeWorkspaceId ? ' active' : ''}`;
-    if (ws.unreadNotifications > 0) tab.classList.add('has-notification');
-
     let metaHtml = '';
     if (ws.gitBranch) {
       metaHtml += `<span class="tab-branch">${escapeHtml(ws.gitBranch)}</span>`;
@@ -83,13 +81,6 @@ export function renderSidebar(): void {
     });
 
     list.appendChild(tab);
-  }
-
-  const totalUnread = state.notifications.filter((n: AppNotification) => !n.read).length;
-  const badge = document.getElementById('notification-badge');
-  if (badge) {
-    badge.textContent = String(totalUnread);
-    badge.classList.toggle('hidden', totalUnread === 0);
   }
 }
 

@@ -27,7 +27,6 @@ import {
   IPC_CHANNELS,
   WorkspaceState,
   SplitLeaf,
-  AppNotification,
   AppSettings,
 } from '../shared/types';
 
@@ -64,7 +63,6 @@ const defaultSettings: AppSettings = {
   backgroundImage: '',
   sidebarWidth: 240,
   unfocusedPanelOpacity: 0.6,
-  notificationSound: true,
   sessionRestoreEnabled: true,
   socketControlMode: 'nextermOnly',
   defaultShell: 'powershell.exe',
@@ -211,23 +209,6 @@ function setupIpcHandlers(): void {
     return {};
   });
 
-  // 알림 발송 (Windows Toast)
-  ipcMain.on(IPC_CHANNELS.NOTIFICATION_SEND, (_event, notif: AppNotification) => {
-    if (currentSettings.notificationSound) {
-      // 시스템 알림 표시
-      const toast = new Notification({
-        title: notif.title,
-        body: notif.body,
-        icon: path.join(appRoot, 'assets/icon.png'),
-      });
-      toast.on('click', () => {
-        windowManager.showAndFocus();
-        windowManager.broadcast('notification:clicked', notif);
-      });
-      toast.show();
-    }
-  });
-
   // 설정 조회/변경
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, () => currentSettings);
 
@@ -278,7 +259,7 @@ function setupIpcHandlers(): void {
     });
 
     // 작업 완료 시 Windows Toast 알림
-    if (status === 'completed' && agentName && currentSettings.notificationSound) {
+    if (status === 'completed' && agentName) {
       const toast = new Notification({
         title: `${agentName} 작업 완료`,
         body: '에이전트가 작업을 마치고 입력을 기다리고 있습니다.',
