@@ -84,22 +84,21 @@ export function createTerminalInstance(
     if (ctrl && key === '[') return false;
     if (ctrl && shift && key === 'U') return false;
 
-    // Ctrl+C: 선택 영역이 있으면 클립보드 복사
+    // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT
     if (ctrl && !shift && key.toLowerCase() === 'c') {
       if (terminal.hasSelection()) {
         electronAPI.clipboard.writeText(terminal.getSelection());
         terminal.clearSelection();
         return false;
       }
-      return true;
+      return true; // SIGINT 전달
     }
 
-    // Ctrl+V: 클립보드 → PTY 직접 전송
-    if (ctrl && !shift && key.toLowerCase() === 'v') {
-      e.preventDefault();
+    // Ctrl+V: 붙여넣기
+    if (ctrl && key.toLowerCase() === 'v') {
       const text = electronAPI.clipboard.readText();
       if (text) {
-        electronAPI.send('terminal:input', { id: panelId, data: text });
+        terminal.paste(text);
       }
       return false;
     }
