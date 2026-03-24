@@ -252,14 +252,18 @@ function setupIpcHandlers(): void {
   // ── AI 에이전트 감지 ──
 
   // 에이전트 상태 변경 시 렌더러에 알림 + Toast 표시
+  // 세션당 한 번만 토스트 발송 (에이전트 종료 후 재시작 시 초기화)
+  const toastSentPanels = new Set<string>();
+
   agentDetectService.onStatusChange((panelId, status, agentName) => {
     windowManager.broadcast(IPC_CHANNELS.AGENT_STATUS_CHANGED, {
       panelId, status, agentName,
       completedAt: status === 'completed' ? Date.now() : undefined,
     });
 
-    // 작업 완료 시 Windows Toast 알림
-    if (status === 'completed' && agentName) {
+    // 작업 완료 시 Windows Toast 알림 (세션당 1회)
+    if (status === 'completed' && agentName && !toastSentPanels.has(panelId)) {
+      toastSentPanels.add(panelId);
       const toast = new Notification({
         title: `${agentName} 작업 완료`,
         body: '에이전트가 작업을 마치고 입력을 기다리고 있습니다.',
@@ -269,6 +273,11 @@ function setupIpcHandlers(): void {
         windowManager.showAndFocus();
       });
       toast.show();
+    }
+
+    // 에이전트 완전 종료 시(exit pattern) 토스트 기록 초기화
+    if (status === 'idle' && !agentDetectService.getLastAgentName(panelId)) {
+      toastSentPanels.delete(panelId);
     }
   });
 

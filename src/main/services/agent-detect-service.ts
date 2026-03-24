@@ -27,7 +27,7 @@ const REACTIVATION_THRESHOLD = 10;
 const DEFAULT_PATTERNS: AgentPattern[] = [
   {
     name: 'Claude Code',
-    identifyPatterns: [/\bclaude\b/i, /╭─/],
+    identifyPatterns: [/\bclaude\b/i],
     completionPatterns: [/╰─/],
     exitPatterns: [/Goodbye!/],
   },
@@ -107,6 +107,11 @@ export class AgentDetectService {
   /** 패널의 에이전트 이름 조회 */
   getAgentName(panelId: string): string | null {
     return this.states.get(panelId)?.agentName ?? null;
+  }
+
+  /** 패널의 마지막 에이전트 이름 조회 (idle 상태에서도 기억 중인 이름) */
+  getLastAgentName(panelId: string): string | null {
+    return this.states.get(panelId)?.lastAgentName ?? null;
   }
 
   /** 모든 활성 패널의 에이전트 정보 반환 */

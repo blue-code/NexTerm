@@ -83,15 +83,15 @@ export function createTerminalInstance(
     }
 
     // Ctrl+V: 붙여넣기 (텍스트 우선, 없으면 이미지 → 임시 파일 경로 삽입)
+    // preventDefault로 브라우저 기본 paste 이벤트를 차단하여 이중 붙여넣기 방지
     if (ctrl && key.toLowerCase() === 'v') {
+      e.preventDefault();
       const text = electronAPI.clipboard.readText();
       if (text) {
         terminal.paste(text);
       } else {
-        // 텍스트가 없으면 클립보드 이미지를 임시 파일로 저장 후 경로 삽입
         const imgPath = electronAPI.clipboard.saveImageToTemp();
         if (imgPath) {
-          // 공백 포함 경로 대비 따옴표로 감싸기
           terminal.paste(`"${imgPath}"`);
         }
       }
