@@ -195,8 +195,11 @@ export class TerminalService {
             // ConPTY 자체 프로세스는 무시 (셸 자신)
             if (cmdLine === '' || /\\\\\\?\\/.test(cmdLine)) continue;
 
-            // cmd /k 또는 powershell -Command 등 실제 명령이 있는 경우만 가로채기
-            if (!/\/[kKcC]\s/.test(cmdLine) && !/-Command\s/.test(cmdLine)) continue;
+            // cmd /c는 배치 파일 실행이므로 무시 (새 터미널 창이 아님)
+            // cmd /k만 가로채기 (start 명령으로 새 콘솔 창을 만든 경우)
+            if (name === 'cmd.exe' && !/\/[kK]\s/.test(cmdLine)) continue;
+            // powershell -Command 등 새 셸 인스턴스만 가로채기
+            if ((name === 'powershell.exe' || name === 'pwsh.exe') && !/-Command\s/.test(cmdLine)) continue;
 
             // 새 콘솔 프로세스 감지 → 종료 후 새 패널로 전환
             try {

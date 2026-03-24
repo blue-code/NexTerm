@@ -200,7 +200,11 @@ function renderPanel(panel: PanelState): HTMLElement {
   const focusPanel = () => {
     state.focusedPanelId = panel.id;
     const ws = getActiveWorkspace();
-    if (ws) ws.activePanelId = panel.id;
+    if (ws) {
+      ws.activePanelId = panel.id;
+      // 패널 포커스 변경 시 워크스페이스 CWD도 갱신 (Git 폴링에서 사용)
+      if (panel.cwd) ws.cwd = panel.cwd;
+    }
     document.querySelectorAll('.split-pane').forEach((p) => {
       const el = p as HTMLElement;
       el.classList.toggle('focused', el.dataset.panelId === panel.id);

@@ -262,6 +262,10 @@ function updatePanelCwd(panelId: string, title: string): void {
     const panel = ws.panels.find((p: PanelState) => p.id === panelId);
     if (panel) {
       panel.cwd = cwdPath;
+      // 활성 패널의 CWD 변경 시 워크스페이스 CWD도 갱신 (Git 폴링 등에서 사용)
+      if (ws.activePanelId === panelId) {
+        ws.cwd = cwdPath;
+      }
       break;
     }
   }

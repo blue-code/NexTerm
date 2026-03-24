@@ -71,8 +71,18 @@ async function pollPorts(): Promise<void> {
       }
     }
 
+    // 스캔에 참여한 워크스페이스 (PID가 조회된 워크스페이스)
+    const scannedWsIds = new Set<string>();
+    for (const wsIds of pidMap.values()) {
+      for (const wsId of wsIds) scannedWsIds.add(wsId);
+    }
+
     let changed = false;
     for (const ws of state.workspaces) {
+      // 스캔에 참여하지 않은 워크스페이스는 기존 포트 유지
+      // (PID 조회 실패 등으로 스캔 자체가 안 된 경우)
+      if (!scannedWsIds.has(ws.id)) continue;
+
       const newPorts = portsByWs.has(ws.id)
         ? Array.from(portsByWs.get(ws.id)!).sort((a, b) => a - b)
         : [];

@@ -21,25 +21,30 @@ const OUTPUT_IDLE_MS = 3000;
 // completed → idle 자동 해제 시간 (밀리초)
 const COMPLETED_DISMISS_MS = 15000;
 // completed 상태에서 재활성화를 위한 최소 출력량 (bytes)
-// 키 입력 에코(1~2자)와 에이전트 작업 출력을 구분하기 위한 임계값
-const REACTIVATION_THRESHOLD = 10;
+// 에이전트 작업 출력(도구 실행 등)은 일반적으로 50바이트 이상
+const REACTIVATION_THRESHOLD = 50;
 
+// idle → active 전환을 위해 최소 매칭 패턴 수
+// 1회 매칭으로 즉시 전환하지 않고, 확인 패턴을 함께 요구한다
 const DEFAULT_PATTERNS: AgentPattern[] = [
   {
     name: 'Claude Code',
-    identifyPatterns: [/\bclaude\b/i],
+    // "claude" 단어만으로는 부족, TUI 프롬프트 패턴(╭─, ╰─)과 함께 매칭
+    identifyPatterns: [/claude\s*>/i, /\bclaude\s+code\b/i],
     completionPatterns: [/╰─/],
     exitPatterns: [/Goodbye!/],
   },
   {
     name: 'Codex',
-    identifyPatterns: [/\bcodex\b/i],
+    // "codex>" 프롬프트 또는 "OpenAI Codex" 명시적 문자열만 감지
+    identifyPatterns: [/codex>\s*$/i, /openai\s+codex/i],
     completionPatterns: [/codex>\s*$/],
     exitPatterns: [/exiting codex/i],
   },
   {
     name: 'Gemini',
-    identifyPatterns: [/\bgemini\b/i],
+    // "gemini>" 프롬프트 또는 "Google Gemini" 명시적 문자열만 감지
+    identifyPatterns: [/gemini>\s*$/i, /google\s+gemini/i],
     completionPatterns: [/gemini>\s*$/],
     exitPatterns: [/goodbye/i],
   },
@@ -80,12 +85,10 @@ export class AgentDetectService {
       this.resetIdleTimer(panelId, state);
     }
 
-    // completed 또는 idle(이전 에이전트 기억 중): 의미 있는 출력이 오면 다시 active로 전환
-    // 키 입력 에코(1~2자)는 무시, 에이전트 작업 출력만 감지
+    // completed 상태: 의미 있는 출력(50바이트 이상)이 오면 다시 active로 전환
+    // idle에서는 재활성화하지 않음 — 반드시 식별 패턴을 다시 매칭해야 active로 진입
     if (state.status === 'completed' && trimmedLen > REACTIVATION_THRESHOLD) {
       this.transitionTo(panelId, state, 'active', state.agentName);
-    } else if (state.status === 'idle' && state.lastAgentName && trimmedLen > REACTIVATION_THRESHOLD) {
-      this.transitionTo(panelId, state, 'active', state.lastAgentName);
     }
 
     // 라인 버퍼링 후 패턴 매칭
