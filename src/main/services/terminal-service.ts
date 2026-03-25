@@ -96,8 +96,9 @@ export class TerminalService {
     const resolvedShell = this.resolveShell(shell);
 
     const env = { ...process.env } as Record<string, string>;
-    // Windows 레지스트리에서 최신 PATH를 읽어 반영 (앱 실행 후 PATH 변경 대응)
-    env['PATH'] = this.refreshWindowsPath();
+    // Windows 레지스트리에서 최신 PATH를 읽어 기존 PATH와 병합
+    // 레지스트리 값으로 완전 교체하면 Git Credential Manager 등 프로세스 환경에만 있는 경로가 누락됨
+    env['PATH'] = this.mergeWindowsPath(env['PATH'] || '');
     // NexTerm 환경 변수 주입 (에이전트가 CLI 사용 가능하도록)
     env['NEXTERM_PIPE'] = '\\\\.\\pipe\\nexterm-ipc';
     env['NEXTERM_PANEL_ID'] = id;
@@ -174,39 +175,40 @@ export class TerminalService {
         return;
       }
 
-      exec(`powershell -NoProfile -Command "${psCommand}"`, { timeout: 3000 }, (err, stdout) => {
-        if (err || !stdout.trim()) return;
-        try {
-          let processes = JSON.parse(stdout.trim());
-          if (!Array.isArray(processes)) processes = [processes];
+      try {
+        exec(`powershell -NoProfile -Command "${psCommand}"`, { timeout: 3000 }, (err, stdout) => {
+          if (err || !stdout.trim()) return;
+          try {
+            let processes = JSON.parse(stdout.trim());
+            if (!Array.isArray(processes)) processes = [processes];
 
-          for (const proc of processes) {
-            const pid = proc.ProcessId;
-            const name = (proc.Name || '').toLowerCase();
-            const cmdLine = proc.CommandLine || '';
+            for (const proc of processes) {
+              const pid = proc.ProcessId;
+              const name = (proc.Name || '').toLowerCase();
+              const cmdLine = proc.CommandLine || '';
 
-            // 이미 알고 있는 PID는 무시
-            if (knownPids.has(pid)) continue;
-            knownPids.add(pid);
+              // 이미 알고 있는 PID는 무시
+              if (knownPids.has(pid)) continue;
+              knownPids.add(pid);
 
-            // 터미널 프로그램이 아니면 무시
-            if (!terminalNames.has(name)) continue;
+              // 터미널 프로그램이 아니면 무시
+              if (!terminalNames.has(name)) continue;
 
-            // ConPTY 자체 프로세스는 무시 (셸 자신)
-            if (cmdLine === '' || /\\\\\\?\\/.test(cmdLine)) continue;
+              // ConPTY 자체 프로세스는 무시 (셸 자신)
+              if (cmdLine === '' || /\\\\\\?\\/.test(cmdLine)) continue;
 
-            // cmd /c는 배치 파일 실행이므로 무시 (새 터미널 창이 아님)
-            // cmd /k만 가로채기 (start 명령으로 새 콘솔 창을 만든 경우)
-            if (name === 'cmd.exe' && !/\/[kK]\s/.test(cmdLine)) continue;
-            // powershell -Command 등 새 셸 인스턴스만 가로채기
-            if ((name === 'powershell.exe' || name === 'pwsh.exe') && !/-Command\s/.test(cmdLine)) continue;
+              // cmd /c는 배치 파일 실행이므로 무시 (새 터미널 창이 아님)
+              // cmd /k만 가로채기 (start 명령으로 새 콘솔 창을 만든 경우)
+              if (name === 'cmd.exe' && !/\/[kK]\s/.test(cmdLine)) continue;
+              // powershell -Command 등 새 셸 인스턴스만 가로채기
+              if ((name === 'powershell.exe' || name === 'pwsh.exe') && !/-Command\s/.test(cmdLine)) continue;
 
-            // 새 콘솔 프로세스 감지 → 종료 후 새 패널로 전환
-            try {
-              process.kill(pid);
-            } catch {
-              // 이미 종료된 경우 무시
-            }
+              // 새 콘솔 프로세스 감지 → 종료 후 새 패널로 전환
+              try {
+                process.kill(pid);
+              } catch {
+                // 이미 종료된 경우 무시
+              }
 
             if (this.onChildTerminalDetected) {
               this.onChildTerminalDetected(cmdLine, '');
@@ -215,7 +217,10 @@ export class TerminalService {
         } catch {
           // JSON 파싱 실패 무시
         }
-      });
+        });
+      } catch {
+        // spawn 실패 시 무시 (시스템 리소스 부족 등)
+      }
     }, 800);
 
     this.childMonitors.set(terminalId, interval);
@@ -338,10 +343,11 @@ export class TerminalService {
   }
 
   /**
-   * Windows 레지스트리에서 최신 시스템+사용자 PATH를 읽어 반환
-   * Electron 앱 실행 후 PATH가 변경되어도 새 터미널에 즉시 반영된다.
+   * Windows 레지스트리에서 최신 PATH를 읽고 기존 프로세스 PATH와 병합
+   * 레지스트리에 새로 추가된 경로를 반영하면서, 프로세스 환경에만 존재하는
+   * 경로(Git mingw64/bin 등)도 유지한다.
    */
-  private refreshWindowsPath(): string {
+  private mergeWindowsPath(currentPath: string): string {
     try {
       const systemPath = execSync(
         'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
@@ -353,10 +359,21 @@ export class TerminalService {
         { encoding: 'utf-8', timeout: 3000 },
       ).replace(/[\r\n]+/g, ' ').replace(/.*REG_(?:SZ|EXPAND_SZ)\s+/i, '').trim();
 
-      return `${userPath};${systemPath}`;
+      // 레지스트리 PATH를 기준으로, 기존 프로세스 PATH에만 있는 경로를 뒤에 추가
+      const registryPath = `${userPath};${systemPath}`;
+      const registrySet = new Set(
+        registryPath.split(';').map(p => p.toLowerCase().replace(/\\+$/, '')).filter(Boolean),
+      );
+
+      const extraPaths = currentPath
+        .split(';')
+        .filter(p => p && !registrySet.has(p.toLowerCase().replace(/\\+$/, '')));
+
+      return extraPaths.length > 0
+        ? `${registryPath};${extraPaths.join(';')}`
+        : registryPath;
     } catch {
-      // 레지스트리 조회 실패 시 기존 process.env.PATH 사용
-      return process.env.PATH || '';
+      return currentPath || process.env.PATH || '';
     }
   }
 
