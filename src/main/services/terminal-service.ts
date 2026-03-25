@@ -8,6 +8,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec, execSync } from 'child_process';
 import { app } from 'electron';
+import { createLogger } from './logger';
+
+const log = createLogger('TerminalService');
 
 interface TerminalInstance {
   process: pty.IPty;
@@ -95,18 +98,7 @@ export class TerminalService {
     // Windows에서 사용 가능한 셸 자동 감지
     const resolvedShell = this.resolveShell(shell);
 
-    const env = { ...process.env } as Record<string, string>;
-    // Windows 레지스트리에서 최신 PATH를 읽어 기존 PATH와 병합
-    // 레지스트리 값으로 완전 교체하면 Git Credential Manager 등 프로세스 환경에만 있는 경로가 누락됨
-    env['PATH'] = this.mergeWindowsPath(env['PATH'] || '');
-    // NexTerm 환경 변수 주입 (에이전트가 CLI 사용 가능하도록)
-    env['NEXTERM_PIPE'] = '\\\\.\\pipe\\nexterm-ipc';
-    env['NEXTERM_PANEL_ID'] = id;
-    env['TERM_PROGRAM'] = 'nexterm';
-    // nt.cmd 등 헬퍼 스크립트를 PATH 선두에 추가
-    if (this.binDir) {
-      env['PATH'] = this.binDir + ';' + env['PATH'];
-    }
+    const env = this.buildCleanEnv(id);
 
     // PowerShell인 경우 프롬프트에 OSC 2 시퀀스 주입 (CWD 실시간 추적용)
     const spawnArgs = this.buildShellArgs(resolvedShell);
@@ -343,11 +335,61 @@ export class TerminalService {
   }
 
   /**
-   * Windows 레지스트리에서 최신 PATH를 읽고 기존 프로세스 PATH와 병합
-   * 레지스트리에 새로 추가된 경로를 반영하면서, 프로세스 환경에만 존재하는
-   * 경로(Git mingw64/bin 등)도 유지한다.
+   * 터미널에 전달할 깨끗한 환경 변수 생성
+   * - Windows 대소문자 키 중복 방지 (Path vs PATH)
+   * - 레지스트리 PATH + 프로세스 PATH 병합 + 중복 제거
+   * - Electron 전용 변수 제거 (자식 프로세스 혼란 방지)
    */
-  private mergeWindowsPath(currentPath: string): string {
+  private buildCleanEnv(panelId: string): Record<string, string> {
+    // Windows에서 process.env 스프레드 시 대소문자 키 중복 발생 방지
+    // process.env는 case-insensitive proxy지만 스프레드하면 case-sensitive 객체가 됨
+    const env: Record<string, string> = {};
+    const seenKeys = new Map<string, string>(); // lowercase → 실제 키
+    for (const key of Object.keys(process.env)) {
+      const lower = key.toLowerCase();
+      const existing = seenKeys.get(lower);
+      if (existing) {
+        delete env[existing]; // 중복 키 제거
+      }
+      seenKeys.set(lower, key);
+      env[key] = process.env[key] || '';
+    }
+
+    // Electron 전용 환경 변수 제거 (git 등 자식 프로세스에 불필요)
+    for (const key of Object.keys(env)) {
+      if (/^ELECTRON_/i.test(key)) {
+        delete env[key];
+      }
+    }
+
+    // PATH 병합: 레지스트리 최신 값 + 프로세스 고유 경로, 중복 제거
+    const pathKey = seenKeys.get('path') || 'PATH';
+    env[pathKey] = this.buildMergedPath(env[pathKey] || '');
+
+    // nt.cmd 등 헬퍼 스크립트를 PATH 선두에 추가
+    if (this.binDir) {
+      env[pathKey] = this.binDir + ';' + env[pathKey];
+    }
+
+    // NexTerm 환경 변수 주입
+    env['NEXTERM_PIPE'] = '\\\\.\\pipe\\nexterm-ipc';
+    env['NEXTERM_PANEL_ID'] = panelId;
+    env['TERM_PROGRAM'] = 'nexterm';
+    env['GIT_TERMINAL_PROMPT'] = '1';
+
+    log.info('터미널 환경', {
+      panelId,
+      pathLength: env[pathKey].length,
+      envSize: Object.keys(env).reduce((sum, k) => sum + k.length + (env[k]?.length || 0) + 2, 0),
+    });
+
+    return env;
+  }
+
+  /**
+   * 레지스트리 PATH + 프로세스 PATH를 병합하고 중복 제거
+   */
+  private buildMergedPath(currentPath: string): string {
     try {
       const systemPath = execSync(
         'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
@@ -359,19 +401,19 @@ export class TerminalService {
         { encoding: 'utf-8', timeout: 3000 },
       ).replace(/[\r\n]+/g, ' ').replace(/.*REG_(?:SZ|EXPAND_SZ)\s+/i, '').trim();
 
-      // 레지스트리 PATH를 기준으로, 기존 프로세스 PATH에만 있는 경로를 뒤에 추가
-      const registryPath = `${userPath};${systemPath}`;
-      const registrySet = new Set(
-        registryPath.split(';').map(p => p.toLowerCase().replace(/\\+$/, '')).filter(Boolean),
-      );
+      // 레지스트리 + 프로세스 PATH 합산 후 중복 제거 (순서 유지)
+      const allPaths = `${userPath};${systemPath};${currentPath}`.split(';');
+      const seen = new Set<string>();
+      const deduplicated: string[] = [];
+      for (const p of allPaths) {
+        if (!p) continue;
+        const normalized = p.toLowerCase().replace(/\\+$/, '');
+        if (seen.has(normalized)) continue;
+        seen.add(normalized);
+        deduplicated.push(p);
+      }
 
-      const extraPaths = currentPath
-        .split(';')
-        .filter(p => p && !registrySet.has(p.toLowerCase().replace(/\\+$/, '')));
-
-      return extraPaths.length > 0
-        ? `${registryPath};${extraPaths.join(';')}`
-        : registryPath;
+      return deduplicated.join(';');
     } catch {
       return currentPath || process.env.PATH || '';
     }
