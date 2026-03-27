@@ -23,9 +23,14 @@ type ChildProcessHandler = (commandLine: string, cwd: string) => void;
 
 export class TerminalService {
   private terminals = new Map<string, TerminalInstance>();
-  private childMonitors = new Map<string, NodeJS.Timeout>();
   private onChildTerminalDetected: ChildProcessHandler | null = null;
   private binDir: string = '';
+
+  // 공유 자식 프로세스 감시: 단일 wmic 호출로 전체 터미널의 자식을 일괄 조회
+  private monitoredPids = new Map<string, number>(); // terminalId → parentPid
+  private knownChildPids = new Set<number>();
+  private sharedMonitorInterval: NodeJS.Timeout | null = null;
+  private sharedMonitorRunning = false; // wmic 실행 중 중복 방지
 
   /**
    * NexTerm CLI 헬퍼 스크립트 생성 (nt.cmd, nexterm-start.cmd)
@@ -129,15 +134,20 @@ export class TerminalService {
       for (const listener of instance.exitListeners) {
         listener(exitCode);
       }
-      this.terminals.delete(id);
+      // 동일 ID로 재생성된 경우, 새 인스턴스를 삭제하지 않도록 방어
+      if (this.terminals.get(id) === instance) {
+        this.terminals.delete(id);
+        this.monitoredPids.delete(id);
+      }
     });
 
     this.terminals.set(id, instance);
 
-    // 자식 프로세스 감시 시작 (배치 파일의 start 명령 가로채기)
+    // 공유 자식 프로세스 감시에 등록
     const pid = ptyProcess.pid;
     if (pid) {
-      this.startChildMonitor(id, pid);
+      this.monitoredPids.set(id, pid);
+      this.ensureSharedMonitor();
     }
   }
 
@@ -150,49 +160,72 @@ export class TerminalService {
   }
 
   /**
-   * 자식 프로세스 감시: 터미널 PID의 자식 중 새 콘솔 프로세스를 감지하여 가로챈다.
-   * start 명령이 CREATE_NEW_CONSOLE로 생성한 cmd.exe/powershell.exe를 포착한다.
+   * 공유 자식 프로세스 감시 시작
+   * 모든 터미널을 하나의 타이머로 감시한다. wmic 1회 호출로 전체 프로세스 트리를 조회하고
+   * JS에서 각 터미널의 parentPid 기준으로 필터링한다.
+   * 터미널 N개여도 프로세스 생성은 2초당 1회.
    */
-  private startChildMonitor(terminalId: string, parentPid: number): void {
-    const knownPids = new Set<number>();
-    const terminalNames = new Set(['cmd.exe', 'powershell.exe', 'pwsh.exe']);
+  private ensureSharedMonitor(): void {
+    if (this.sharedMonitorInterval) return;
 
-    // 감시 대상 프로세스의 전체 자손 트리에서 새로운 터미널 프로세스를 찾는다
-    const psCommand = `Get-CimInstance Win32_Process | Where-Object {$_.ParentProcessId -eq ${parentPid} -and $_.ProcessId -ne ${parentPid}} | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress`;
+    const TERMINAL_NAMES = new Set(['cmd.exe', 'powershell.exe', 'pwsh.exe']);
+    const POLL_INTERVAL = 2000;
 
-    const interval = setInterval(() => {
-      if (!this.terminals.has(terminalId)) {
-        clearInterval(interval);
-        this.childMonitors.delete(terminalId);
+    this.sharedMonitorInterval = setInterval(() => {
+      // 감시 대상 없으면 타이머 정리 + 누적 PID 초기화
+      if (this.monitoredPids.size === 0) {
+        if (this.sharedMonitorInterval) {
+          clearInterval(this.sharedMonitorInterval);
+          this.sharedMonitorInterval = null;
+        }
+        this.knownChildPids.clear();
         return;
       }
 
-      try {
-        exec(`powershell -NoProfile -Command "${psCommand}"`, { timeout: 3000 }, (err, stdout) => {
+      // 이전 wmic가 아직 실행 중이면 건너뜀
+      if (this.sharedMonitorRunning) return;
+      this.sharedMonitorRunning = true;
+
+      exec(
+        'wmic process get ProcessId,ParentProcessId,Name,CommandLine /format:csv',
+        { timeout: 5000 },
+        (err, stdout) => {
+          this.sharedMonitorRunning = false;
           if (err || !stdout.trim()) return;
+
           try {
-            let processes = JSON.parse(stdout.trim());
-            if (!Array.isArray(processes)) processes = [processes];
+            // 감시 대상 parentPid 집합 (빠른 lookup용)
+            const parentPids = new Set(this.monitoredPids.values());
 
-            for (const proc of processes) {
-              const pid = proc.ProcessId;
-              const name = (proc.Name || '').toLowerCase();
-              const cmdLine = proc.CommandLine || '';
+            const lines = stdout.trim().split('\n');
+            for (const line of lines) {
+              // CSV: Node,CommandLine,Name,ParentProcessId,ProcessId
+              const parts = line.trim().split(',');
+              if (parts.length < 5) continue;
 
-              // 이미 알고 있는 PID는 무시
-              if (knownPids.has(pid)) continue;
-              knownPids.add(pid);
+              const pid = parseInt(parts[parts.length - 1], 10);
+              const parentPid = parseInt(parts[parts.length - 2], 10);
+              const name = (parts[parts.length - 3] || '').toLowerCase();
+              // CommandLine은 쉼표를 포함할 수 있으므로 앞뒤 고정 필드를 제외한 나머지
+              const cmdLine = parts.slice(1, parts.length - 3).join(',');
+
+              if (isNaN(pid) || isNaN(parentPid)) continue;
+              if (!parentPids.has(parentPid)) continue;
+              if (pid === parentPid) continue;
+
+              // 이미 처리한 PID
+              if (this.knownChildPids.has(pid)) continue;
+              this.knownChildPids.add(pid);
 
               // 터미널 프로그램이 아니면 무시
-              if (!terminalNames.has(name)) continue;
+              if (!TERMINAL_NAMES.has(name)) continue;
 
-              // ConPTY 자체 프로세스는 무시 (셸 자신)
+              // ConPTY 자체 프로세스는 무시
               if (cmdLine === '' || /\\\\\\?\\/.test(cmdLine)) continue;
 
-              // cmd /c는 배치 파일 실행이므로 무시 (새 터미널 창이 아님)
-              // cmd /k만 가로채기 (start 명령으로 새 콘솔 창을 만든 경우)
+              // cmd /c는 배치 파일이므로 무시, cmd /k만 가로채기
               if (name === 'cmd.exe' && !/\/[kK]\s/.test(cmdLine)) continue;
-              // powershell -Command 등 새 셸 인스턴스만 가로채기
+              // powershell -Command 등 새 셸만 가로채기
               if ((name === 'powershell.exe' || name === 'pwsh.exe') && !/-Command\s/.test(cmdLine)) continue;
 
               // 새 콘솔 프로세스 감지 → 종료 후 새 패널로 전환
@@ -202,20 +235,16 @@ export class TerminalService {
                 // 이미 종료된 경우 무시
               }
 
-            if (this.onChildTerminalDetected) {
-              this.onChildTerminalDetected(cmdLine, '');
+              if (this.onChildTerminalDetected) {
+                this.onChildTerminalDetected(cmdLine, '');
+              }
             }
+          } catch {
+            // 파싱 실패 무시
           }
-        } catch {
-          // JSON 파싱 실패 무시
-        }
-        });
-      } catch {
-        // spawn 실패 시 무시 (시스템 리소스 부족 등)
-      }
-    }, 800);
-
-    this.childMonitors.set(terminalId, interval);
+        },
+      );
+    }, POLL_INTERVAL);
   }
 
   /** 터미널에 데이터 쓰기 (키 입력) */
@@ -247,12 +276,8 @@ export class TerminalService {
 
   /** 터미널 프로세스 종료 */
   destroy(id: string): void {
-    // 자식 프로세스 감시 정리
-    const monitor = this.childMonitors.get(id);
-    if (monitor) {
-      clearInterval(monitor);
-      this.childMonitors.delete(id);
-    }
+    // 공유 감시에서 제거
+    this.monitoredPids.delete(id);
 
     const terminal = this.terminals.get(id);
     if (terminal) {
@@ -267,6 +292,14 @@ export class TerminalService {
 
   /** 전체 터미널 정리 */
   destroyAll(): void {
+    // 공유 감시 타이머 정리
+    if (this.sharedMonitorInterval) {
+      clearInterval(this.sharedMonitorInterval);
+      this.sharedMonitorInterval = null;
+    }
+    this.monitoredPids.clear();
+    this.knownChildPids.clear();
+
     for (const [id] of this.terminals) {
       this.destroy(id);
     }
