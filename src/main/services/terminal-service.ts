@@ -454,6 +454,12 @@ export class TerminalService {
 
   /** Windows에서 사용 가능한 셸 경로 결정 */
   private resolveShell(requested: string): string {
+    if (requested === 'git-bash' || /(^|[\\/])bash\.exe$/i.test(requested)) {
+      const gitBash = this.findGitBash();
+      if (gitBash) return gitBash;
+      if (requested === 'git-bash') return process.env.COMSPEC || 'cmd.exe';
+    }
+
     // 이름만 지정된 경우 (powershell.exe 등) PATH에서 찾도록 그대로 반환
     if (!requested.includes('\\') && !requested.includes('/')) {
       return requested;
@@ -478,5 +484,39 @@ export class TerminalService {
     }
 
     return process.env.COMSPEC || 'cmd.exe';
+  }
+
+  private findGitBash(): string | null {
+    const candidates = [
+      process.env['GIT_BASH'],
+      process.env['ProgramFiles'] ? path.join(process.env['ProgramFiles'], 'Git', 'bin', 'bash.exe') : undefined,
+      process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe') : undefined,
+      process.env['LocalAppData'] ? path.join(process.env['LocalAppData'], 'Programs', 'Git', 'bin', 'bash.exe') : undefined,
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    try {
+      const whereOutput = execSync('where git', { encoding: 'utf-8', timeout: 3000 })
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+      for (const gitPath of whereOutput) {
+        const candidate = path.resolve(path.dirname(gitPath), '..', 'bin', 'bash.exe');
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    } catch {
+      // Git이 PATH에 없으면 고정 후보만 사용한다.
+    }
+
+    return null;
   }
 }

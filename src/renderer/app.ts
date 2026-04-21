@@ -31,6 +31,10 @@ import type { AppSettings } from '../../shared/types';
 
 const log = createLogger('app');
 
+function normalizeShellSetting(shell?: string): string {
+  return shell === 'bash.exe' ? 'git-bash' : (shell || 'powershell.exe');
+}
+
 // ── 렌더링 콜백 연결 ──
 setRenderCallbacks(renderSidebar, renderWorkspaceContent);
 
@@ -164,8 +168,12 @@ async function initSettings(): Promise<void> {
 
   const shellSelect = document.getElementById('setting-shell') as HTMLSelectElement | null;
   if (shellSelect) {
-    shellSelect.value = state.settings?.defaultShell || 'powershell.exe';
+    shellSelect.value = normalizeShellSetting(state.settings?.defaultShell);
     state.defaultShell = shellSelect.value;
+    if (state.settings && state.settings.defaultShell !== shellSelect.value) {
+      state.settings.defaultShell = shellSelect.value;
+      electronAPI.invoke('settings:set', { defaultShell: shellSelect.value });
+    }
     shellSelect.addEventListener('change', () => {
       state.defaultShell = shellSelect.value;
       if (!state.settings) state.settings = {} as AppSettings;

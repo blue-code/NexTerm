@@ -205,20 +205,32 @@ export function applyFontSizeToAllTerminals(fontSize: number): void {
 export function fitTerminal(inst: TerminalInst): void {
   try {
     const term = inst.terminal;
+    const rect = inst.container.getBoundingClientRect();
+    if (!inst.container.isConnected || rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
     // 현재 스크롤 위치 저장: 최하단에 있으면 fit 후에도 최하단 유지
-    const viewport = (term as any)._core?._renderService?.dimensions;
+    const savedViewportY = term.buffer.active.viewportY;
     const isAtBottom = term.buffer.active.viewportY >= term.buffer.active.baseY;
 
     inst.fitAddon.fit();
 
     // 최하단이 아니었으면 스크롤 위치 복원 (밀어올림 방지)
     if (!isAtBottom && term.buffer.active.baseY > 0) {
-      // fit() 후 자동 스크롤을 방지하기 위해 현재 위치 유지
-      // xterm은 fit 시 자동으로 scrollToBottom하지 않으므로 대부분 안전
+      term.scrollToLine(Math.min(savedViewportY, term.buffer.active.baseY));
     }
   } catch {
     // 이미 dispose된 터미널 무시
   }
+}
+
+/** DOM 마운트 직후 레이아웃 확정까지 기다린 뒤 fit */
+export function queueTerminalFit(inst: TerminalInst): void {
+  requestAnimationFrame(() => {
+    fitTerminal(inst);
+    requestAnimationFrame(() => fitTerminal(inst));
+  });
 }
 
 // ── fit 디바운스: 여러 곳에서 동시 호출 시 1회만 실행 ──

@@ -12,7 +12,7 @@ import {
   openBrowserPanel,
   renameWorkspace,
 } from './workspace';
-import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, fitTerminal, terminalPool } from './terminal';
+import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, queueTerminalFit, terminalPool } from './terminal';
 import { toggleTerminalSearch } from './search';
 import type { SplitNode, SplitBranch } from './layout';
 import { getWorkspaceAgentStatus } from './agent-indicator';
@@ -133,11 +133,13 @@ export function renderWorkspaceContent(): void {
           const wasAtBottom = savedViewportY >= term.buffer.active.baseY;
 
           mount.appendChild(inst.container);
-          fitTerminal(inst);
+          queueTerminalFit(inst);
 
           // display:none → visible 전환 후 스크롤 위치 복원
           if (!wasAtBottom && term.buffer.active.baseY > 0) {
-            term.scrollToLine(savedViewportY);
+            requestAnimationFrame(() => {
+              term.scrollToLine(Math.min(savedViewportY, term.buffer.active.baseY));
+            });
           }
         }
       }
