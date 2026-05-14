@@ -20,6 +20,7 @@ import { startPolling } from './polling';
 import { restoreSession, initSessionListeners } from './session';
 import { initIpcCommands } from './ipc-commands';
 import { initAgentListeners } from './agent-indicator';
+import { toggleFrequentCommands } from './frequent-commands';
 import { createLogger } from './logger';
 import { setLocale, getSupportedLocales } from '../shared/i18n';
 // 로케일 등록 (import 시 자동 실행)
@@ -217,6 +218,9 @@ function initUIEvents(): void {
   document.getElementById('btn-new-workspace')?.addEventListener('click', () => createWorkspace());
   document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
     document.getElementById('shortcuts-dialog')?.classList.toggle('hidden');
+  });
+  document.getElementById('btn-frequent-commands')?.addEventListener('click', (e) => {
+    toggleFrequentCommands(e.currentTarget as HTMLElement);
   });
   document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => {
     document.getElementById('shortcuts-dialog')?.classList.add('hidden');

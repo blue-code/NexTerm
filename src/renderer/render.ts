@@ -18,6 +18,8 @@ import type { SplitNode, SplitBranch } from './layout';
 import { getWorkspaceAgentStatus } from './agent-indicator';
 import { createOmnibar } from './omnibar';
 import { createMarkdownViewer } from './markdown-viewer';
+import { attachPanelContextMenu } from './panel-context-menu';
+import { refreshPendingHint } from './pending-input';
 import type { PanelState } from '../../shared/types';
 import type { RuntimeWorkspace } from './state';
 
@@ -123,6 +125,8 @@ export function renderWorkspaceContent(): void {
   // 터미널 마운트: 스크롤 위치를 보존하면서 DOM에 재배치
   requestAnimationFrame(() => {
     for (const panel of ws.panels) {
+      // 패널 재렌더 후 pending input 힌트 복원 (워크스페이스 전환·줌 토글 등)
+      refreshPendingHint(panel.id);
       if (panel.type === 'terminal') {
         const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback);
         const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
@@ -216,6 +220,9 @@ function renderPanel(panel: PanelState): HTMLElement {
 
   pane.addEventListener('mousedown', focusPanel);
 
+  // 우클릭 컨텍스트 메뉴 — 패널 타입별 액션 제공
+  attachPanelContextMenu(pane, panel);
+
   // Focus-follows-mouse: 마우스 hover 시 자동 포커스
   pane.addEventListener('mouseenter', () => {
     if (state.focusFollowsMouse) {
@@ -281,8 +288,8 @@ function renderPanel(panel: PanelState): HTMLElement {
     const mount = document.createElement('div');
     mount.className = 'term-mount';
     mount.dataset.panelId = panel.id;
+    // 높이는 flex로 결정 — .split-pane(column flex) 안에서 남은 공간을 채운다
     mount.style.width = '100%';
-    mount.style.height = 'calc(100% - 28px)';
     pane.appendChild(mount);
   } else if (panel.type === 'browser') {
     renderBrowserContent(pane, panel);

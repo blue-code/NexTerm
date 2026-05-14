@@ -70,6 +70,9 @@ export const state = {
   zoomedPanelId: null as string | null, // 줌된 패널 (null이면 일반 레이아웃)
   focusFollowsMouse: false, // 마우스 hover 시 자동 포커스
   presentationMode: false, // 프레젠테이션 모드 (사이드바/타이틀바 숨김)
+  // send-input으로 등록된 "다음 실행 제안" — Enter면 실행, 일반 타이핑이면 폐기,
+  // 커서 이동 키면 입력창에 커밋되어 편집 가능. 패널별로 하나만 보관.
+  pendingInputs: new Map<string, string>(),
 };
 
 // ── 렌더링 콜백 (순환 의존성 해소용) ──

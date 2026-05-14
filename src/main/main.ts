@@ -8,6 +8,18 @@ if (process.platform === 'win32') {
   try { execSync('chcp 65001', { stdio: 'ignore' }); } catch {}
 }
 
+// Chromium의 백그라운드 네트워크 활동 차단
+// 컴포넌트 자동 업데이트 / 변형 시드 / 도메인 신뢰성 측정 / 네트워크 예측 등이 비활성화된다.
+// 사용자가 직접 연 브라우저 패널 트래픽에는 영향 없음.
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-component-update');
+app.commandLine.appendSwitch('disable-domain-reliability');
+app.commandLine.appendSwitch('disable-features',
+  'OptimizationHints,Translate,MediaRouter,NetworkTimeServiceQuerying,InterestFeedContentSuggestions');
+app.commandLine.appendSwitch('disable-sync');
+// 네트워크 상태 확인 시도(captive portal probe) 차단
+app.commandLine.appendSwitch('disable-features', 'NetworkPrediction');
+
 // 프로덕션/개발 환경 경로 해결
 // 개발: __dirname = <project>/dist/main/
 // 프로덕션: __dirname = <app>/resources/app.asar/dist/main/

@@ -9,6 +9,8 @@ import {
 import { TERMINAL_THEMES } from './themes';
 import { shouldInterceptKey } from './keyboard';
 import { createLogger } from './logger';
+import { consumeInputForHistory, dropPanelBuffer } from './command-history';
+import { handleKeyAgainstPending, dropPendingInput } from './pending-input';
 import type { PanelState } from '../../shared/types';
 
 const log = createLogger('terminal');
@@ -72,11 +74,22 @@ export function createTerminalInstance(
     const shift = e.shiftKey;
     const key = e.key;
 
+    // 보류된 "다음 명령" 제안이 있다면 키 입력에 따라 처리한다.
+    // consumed: 키를 PTY로 전달하지 않음(이미 처리됨)
+    // discarded: 제안만 폐기하고 키는 그대로 셸로 전달
+    // committed: 제안을 입력창에 paste 후 키도 셸로 전달 (화살표 등으로 편집 시작)
+    // pass: 제안 없음 또는 무관한 키
+    const pendingDecision = handleKeyAgainstPending(panelId, e);
+    if (pendingDecision === 'consumed') {
+      e.preventDefault();
+      return false;
+    }
+    // 그 외(committed/discarded/pass)는 기존 단축키·xterm 처리로 흘려보냄
+
     // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT
     if (ctrl && !shift && key.toLowerCase() === 'c') {
       if (terminal.hasSelection()) {
-        electronAPI.clipboard.writeText(terminal.getSelection());
-        terminal.clearSelection();
+        copySelectionFromPanel(panelId);
         return false;
       }
       return true; // SIGINT 전달
@@ -86,15 +99,7 @@ export function createTerminalInstance(
     // preventDefault로 브라우저 기본 paste 이벤트를 차단하여 이중 붙여넣기 방지
     if (ctrl && key.toLowerCase() === 'v') {
       e.preventDefault();
-      const text = electronAPI.clipboard.readText();
-      if (text) {
-        terminal.paste(text);
-      } else {
-        const imgPath = electronAPI.clipboard.saveImageToTemp();
-        if (imgPath) {
-          terminal.paste(`"${imgPath}"`);
-        }
-      }
+      pasteFromClipboardToPanel(panelId);
       return false;
     }
 
@@ -151,6 +156,8 @@ export function createTerminalInstance(
 
   terminal.onData((data: string) => {
     electronAPI.send('terminal:input', { id: panelId, data });
+    // 명령어 빈도 추적: 입력 스트림을 한 줄 단위로 누적
+    consumeInputForHistory(panelId, data);
   });
 
   terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
@@ -173,6 +180,8 @@ export function destroyTerminal(panelId: string): void {
     instance.terminal.dispose();
     instance.container.remove();
     state.terminalInstances.delete(panelId);
+    dropPanelBuffer(panelId);
+    dropPendingInput(panelId);
     electronAPI.send('terminal:close', { id: panelId });
   }
 }
@@ -362,4 +371,61 @@ export function cleanupTerminalIpcListeners(): void {
     cleanup();
   }
   ipcCleanups.length = 0;
+}
+
+// ── 붙여넣기/선택 전송 헬퍼 ──
+
+/**
+ * 임의 텍스트를 터미널에 paste한다.
+ * xterm의 paste()는 bracketed paste 마커를 자동 처리하므로 그대로 사용한다.
+ * 대용량 텍스트는 메인 프로세스의 청크 쓰기에서 처리되므로 여기서는 분할하지 않는다.
+ */
+export function pasteTextToPanel(panelId: string, text: string): void {
+  if (!text) return;
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst) return;
+  // CRLF/LF 정규화 — 셸은 \r을 라인 종결로 처리하므로 통일
+  const normalized = text.replace(/\r\n/g, '\n');
+  inst.terminal.paste(normalized);
+}
+
+/** 클립보드 텍스트(없으면 이미지 임시파일 경로)를 패널에 붙여넣는다. */
+export function pasteFromClipboardToPanel(panelId: string): void {
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst) return;
+  const text = electronAPI.clipboard.readText();
+  if (text) {
+    pasteTextToPanel(panelId, text);
+    return;
+  }
+  const imgPath = electronAPI.clipboard.saveImageToTemp();
+  if (imgPath) {
+    pasteTextToPanel(panelId, `"${imgPath}"`);
+  }
+}
+
+/**
+ * 현재 선택 영역을 같은 패널의 입력으로 보낸다.
+ * 자동 Enter는 부여하지 않는다 — 줄바꿈은 사용자의 선택 안에 포함된 경우에만.
+ */
+export function sendSelectionAsInput(panelId: string): boolean {
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst) return false;
+  if (!inst.terminal.hasSelection()) return false;
+  const sel = inst.terminal.getSelection();
+  if (!sel) return false;
+  pasteTextToPanel(panelId, sel);
+  inst.terminal.clearSelection();
+  inst.terminal.focus();
+  return true;
+}
+
+/** 클립보드에 현재 선택을 복사 (선택이 없으면 false) */
+export function copySelectionFromPanel(panelId: string): boolean {
+  const inst = state.terminalInstances.get(panelId);
+  if (!inst) return false;
+  if (!inst.terminal.hasSelection()) return false;
+  electronAPI.clipboard.writeText(inst.terminal.getSelection());
+  inst.terminal.clearSelection();
+  return true;
 }

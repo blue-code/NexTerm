@@ -16,6 +16,9 @@ interface TerminalInstance {
   process: pty.IPty;
   dataListeners: Array<(data: string) => void>;
   exitListeners: Array<(code: number) => void>;
+  // 청크 단위 쓰기 큐 — 대용량 paste 시 ConPTY 입력 버퍼 오버플로 방지
+  writeQueue: string[];
+  writeFlushing: boolean;
 }
 
 // 자식 프로세스 감지 콜백: 새 콘솔 창으로 생성된 터미널 프로세스를 가로챌 때 호출
@@ -121,6 +124,8 @@ export class TerminalService {
       process: ptyProcess,
       dataListeners: [],
       exitListeners: [],
+      writeQueue: [],
+      writeFlushing: false,
     };
 
     // 출력 데이터 분배
@@ -247,9 +252,82 @@ export class TerminalService {
     }, POLL_INTERVAL);
   }
 
-  /** 터미널에 데이터 쓰기 (키 입력) */
+  /**
+   * 터미널에 데이터 쓰기 (키 입력 + paste)
+   *
+   * 작은 데이터(키 입력 등)는 즉시 전송하고, 큰 데이터(paste)는 청크 큐에 적재해
+   * 1.5KB 단위로 4ms 간격 분할 전송한다. 이유는 ConPTY 입력 파이프와 PSReadLine의
+   * 입력 버퍼가 한 번에 큰 페이로드를 받으면 일부 문자가 누락(잘림)되기 때문이다.
+   */
   write(id: string, data: string): void {
-    this.terminals.get(id)?.process.write(data);
+    const instance = this.terminals.get(id);
+    if (!instance) return;
+
+    // 일반 키 입력 임계값 — 이 이하는 즉시 전송하여 입력 지연 없음
+    const IMMEDIATE_THRESHOLD = 256;
+    if (data.length <= IMMEDIATE_THRESHOLD && instance.writeQueue.length === 0) {
+      instance.process.write(data);
+      return;
+    }
+
+    // 큰 페이로드 또는 큐가 비어있지 않을 때(순서 보존) → 큐에 적재
+    instance.writeQueue.push(data);
+    this.flushWriteQueue(instance);
+  }
+
+  /**
+   * 쓰기 큐를 청크 단위로 비운다.
+   * 한 번에 너무 많이 보내면 ConPTY가 입력을 잘라먹으므로 청크 사이에 마이크로 지연을 둔다.
+   */
+  private flushWriteQueue(instance: TerminalInstance): void {
+    if (instance.writeFlushing) return;
+    instance.writeFlushing = true;
+
+    const CHUNK_SIZE = 1536;
+    const CHUNK_DELAY_MS = 4;
+
+    const sendNext = (): void => {
+      // 큐에서 다음 페이로드 꺼냄
+      const head = instance.writeQueue[0];
+      if (head === undefined) {
+        instance.writeFlushing = false;
+        return;
+      }
+
+      // 헤드가 청크보다 크면 잘라서 보내고 잔여를 큐 앞에 되돌림
+      if (head.length > CHUNK_SIZE) {
+        const chunk = head.slice(0, CHUNK_SIZE);
+        instance.writeQueue[0] = head.slice(CHUNK_SIZE);
+        try {
+          instance.process.write(chunk);
+        } catch {
+          // 종료된 프로세스는 큐 비우고 종료
+          instance.writeQueue.length = 0;
+          instance.writeFlushing = false;
+          return;
+        }
+        setTimeout(sendNext, CHUNK_DELAY_MS);
+        return;
+      }
+
+      // 헤드가 청크 이하 — 통째로 전송 후 큐에서 제거
+      instance.writeQueue.shift();
+      try {
+        instance.process.write(head);
+      } catch {
+        instance.writeQueue.length = 0;
+        instance.writeFlushing = false;
+        return;
+      }
+
+      if (instance.writeQueue.length > 0) {
+        setTimeout(sendNext, CHUNK_DELAY_MS);
+      } else {
+        instance.writeFlushing = false;
+      }
+    };
+
+    sendNext();
   }
 
   /** 터미널 크기 변경 */
@@ -281,6 +359,8 @@ export class TerminalService {
 
     const terminal = this.terminals.get(id);
     if (terminal) {
+      // 남은 쓰기 큐 폐기 (이미 죽은 PTY에 쓰면 예외)
+      terminal.writeQueue.length = 0;
       try {
         terminal.process.kill();
       } catch {
