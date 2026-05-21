@@ -128,7 +128,7 @@ export function renderWorkspaceContent(): void {
       // 패널 재렌더 후 pending input 힌트 복원 (워크스페이스 전환·줌 토글 등)
       refreshPendingHint(panel.id);
       if (panel.type === 'terminal') {
-        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback);
+        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback, panel.resumeAgent);
         const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
         if (mount && inst.container) {
           // 마운트 전 스크롤 상태 저장

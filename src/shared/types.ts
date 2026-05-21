@@ -26,6 +26,9 @@ export interface PanelState {
   scrollback?: string;
   shell?: string;
   shellCommand?: string;
+  // 세션 복원 시 자동 재개할 AI 에이전트 이름 (예: 'Claude Code', 'Codex')
+  // 종료 패턴이 매칭된 패널은 null로 비워져 다음 저장에서 자동 해제된다.
+  resumeAgent?: string | null;
   // AI 에이전트 상태 (런타임)
   agentStatus?: import('./agent-types').AgentStatus;
   agentName?: string;
@@ -77,6 +80,8 @@ export interface AppSettings {
   sidebarWidth: number;
   unfocusedPanelOpacity: number;
   sessionRestoreEnabled: boolean;
+  // 세션 복원 시 이전에 실행 중이던 AI 에이전트(claude, codex 등)를 자동 재개한다.
+  autoResumeAgents: boolean;
   socketControlMode: 'off' | 'nextermOnly' | 'automation' | 'password' | 'allowAll';
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
   externalUrlPatterns: string[]; // 외부 브라우저로 열 URL 패턴 (glob 형태)

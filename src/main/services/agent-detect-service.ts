@@ -117,6 +117,11 @@ export class AgentDetectService {
     return this.states.get(panelId)?.lastAgentName ?? null;
   }
 
+  /** 패널이 추적 대상으로 등록되어 있는지 (한 번이라도 출력을 feed 받았는지) */
+  hasPanel(panelId: string): boolean {
+    return this.states.has(panelId);
+  }
+
   /** 모든 활성 패널의 에이전트 정보 반환 */
   getAllStatuses(): Map<string, AgentInfo> {
     const result = new Map<string, AgentInfo>();

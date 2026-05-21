@@ -31,6 +31,7 @@ export function createTerminalInstance(
   shell?: string,
   shellCommand?: string,
   scrollback?: string,
+  resumeAgent?: string | null,
 ): TerminalInst {
   if (state.terminalInstances.has(panelId)) {
     return state.terminalInstances.get(panelId)!;
@@ -152,6 +153,7 @@ export function createTerminalInstance(
     cwd: cwd || electronAPI.env.USERPROFILE,
     shell: shell || state.defaultShell,
     shellCommand: shellCommand || '',
+    resumeAgent: resumeAgent || null,
   });
 
   terminal.onData((data: string) => {

@@ -76,6 +76,7 @@ const defaultSettings: AppSettings = {
   sidebarWidth: 240,
   unfocusedPanelOpacity: 0.6,
   sessionRestoreEnabled: true,
+  autoResumeAgents: true,
   socketControlMode: 'nextermOnly',
   defaultShell: 'powershell.exe',
   externalUrlPatterns: [],
@@ -106,6 +107,17 @@ function saveSettings(settings: AppSettings): void {
 }
 
 let currentSettings: AppSettings = loadSettings();
+
+/**
+ * 에이전트 이름 → 자동 재개(resume) 명령 매핑
+ * 세션 복원 직후 셸 출력이 안정화되면 이 명령을 자동 입력하여 이전 대화를 잇는다.
+ * Claude Code는 인터랙티브 선택 UI를 피하기 위해 `-c`(가장 최근 대화 이어가기)를 사용.
+ */
+const AGENT_RESUME_COMMANDS: Record<string, string> = {
+  'Claude Code': 'claude -c',
+  'Codex': 'codex resume',
+  'Gemini': 'gemini',
+};
 
 function createWindow(): void {
   // 세션에서 창 크기 복원 시도
@@ -154,7 +166,7 @@ function setupIpcHandlers(): void {
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
   // 터미널 생성
-  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string }) => {
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string; resumeAgent?: string | null }) => {
     const shellPath = opts.shell || process.env.COMSPEC || 'cmd.exe';
     // cwd가 유효하지 않으면 홈 디렉토리로 폴백 (에러 코드 267 방지)
     const requestedCwd = opts.cwd || process.env.USERPROFILE || 'C:\\';
@@ -174,13 +186,50 @@ function setupIpcHandlers(): void {
       }
     }
 
-    // 터미널 출력 → 렌더러 전달 + AI 에이전트 감지
+    // AI 에이전트 자동 재개: 셸 출력이 잠잠해지면 resume 명령을 한 번 자동 입력
+    // shellCommand 주입과 충돌하지 않도록 둘 다 있을 때는 shellCommand 우선
+    const resumeCommand = (
+      currentSettings.autoResumeAgents
+      && opts.resumeAgent
+      && !opts.shellCommand
+    ) ? AGENT_RESUME_COMMANDS[opts.resumeAgent] : null;
+    let resumeIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    let resumeDone = false;
+    const RESUME_IDLE_MS = 600;       // 출력 잠잠 → 프롬프트 안정으로 간주
+    const RESUME_DEADLINE_MS = 5000;  // 출력이 끝없이 흐르면 강제로 한 번 시도
+
+    const fireResume = (): void => {
+      if (resumeDone || !resumeCommand) return;
+      resumeDone = true;
+      if (resumeIdleTimer) { clearTimeout(resumeIdleTimer); resumeIdleTimer = null; }
+      try {
+        terminalService.write(opts.id, resumeCommand + '\r');
+        log.info('AI 에이전트 자동 재개', { panelId: opts.id, agent: opts.resumeAgent, command: resumeCommand });
+      } catch (err) {
+        log.warn('자동 재개 명령 전송 실패', err);
+      }
+    };
+
+    if (resumeCommand) {
+      // 데드라인 보호: 출력이 계속 흐르더라도 일정 시간 후엔 강제 발화
+      setTimeout(fireResume, RESUME_DEADLINE_MS);
+    }
+
+    // 터미널 출력 → 렌더러 전달 + AI 에이전트 감지 + resume 안정화 감지
     terminalService.onData(opts.id, (data: string) => {
       windowManager.broadcast(IPC_CHANNELS.TERMINAL_DATA, { id: opts.id, data });
       agentDetectService.feed(opts.id, data);
+
+      // 자동 재개 대상 패널: 출력이 도착할 때마다 idle 타이머 리셋
+      if (resumeCommand && !resumeDone) {
+        if (resumeIdleTimer) clearTimeout(resumeIdleTimer);
+        resumeIdleTimer = setTimeout(fireResume, RESUME_IDLE_MS);
+      }
     });
 
     terminalService.onExit(opts.id, (exitCode: number) => {
+      if (resumeIdleTimer) { clearTimeout(resumeIdleTimer); resumeIdleTimer = null; }
+      resumeDone = true;
       windowManager.broadcast(IPC_CHANNELS.TERMINAL_CLOSE, { id: opts.id, exitCode });
     });
 
@@ -242,11 +291,27 @@ function setupIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0];
   });
 
-  // 세션 저장 (창 위치/크기를 메인 프로세스에서 주입)
+  // 세션 저장 (창 위치/크기 + 패널별 마지막 에이전트를 메인 프로세스에서 주입)
+  // 렌더러의 agentStatuses는 idle 진입 시 항목이 삭제되므로,
+  // idle 후에도 lastAgentName을 기억하는 메인의 agentDetectService를 권원으로 사용한다.
   ipcMain.on(IPC_CHANNELS.SESSION_SAVE, (event, snapshot) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       snapshot.windowBounds = win.getBounds();
+    }
+    if (Array.isArray(snapshot?.workspaces)) {
+      for (const ws of snapshot.workspaces) {
+        if (!Array.isArray(ws?.panels)) continue;
+        for (const panel of ws.panels) {
+          if (panel?.type !== 'terminal' || !panel.id) continue;
+          // 비활성 워크스페이스 패널은 이번 세션에서 마운트되지 않아 agent-detect에 등록되지 않는다.
+          // 그런 패널의 기존 resumeAgent는 보존하고, 실제 추적 중인 패널만 최신 lastAgentName으로 갱신한다.
+          // (종료 패턴이 매칭된 추적 중 패널은 lastAgentName이 null이 되어 resumeAgent 자동 해제)
+          if (agentDetectService.hasPanel(panel.id)) {
+            panel.resumeAgent = agentDetectService.getLastAgentName(panel.id);
+          }
+        }
+      }
     }
     sessionService.save(snapshot);
   });
