@@ -21,6 +21,7 @@ import { restoreSession, initSessionListeners } from './session';
 import { initIpcCommands } from './ipc-commands';
 import { initAgentListeners } from './agent-indicator';
 import { toggleFrequentCommands } from './frequent-commands';
+import { initUsageStatus, applyUsageProvider } from './usage-status';
 import { createLogger } from './logger';
 import { setLocale, getSupportedLocales } from '../shared/i18n';
 // 로케일 등록 (import 시 자동 실행)
@@ -206,6 +207,34 @@ async function initSettings(): Promise<void> {
       electronAPI.invoke('settings:set', { language: lang });
     });
   }
+
+  // 사용량 표시 제공자 (하단 상태바)
+  const usageSelect = document.getElementById('setting-usage-provider') as HTMLSelectElement | null;
+  if (usageSelect) {
+    usageSelect.value = state.settings?.usageProvider || 'none';
+    usageSelect.addEventListener('change', () => {
+      const provider = usageSelect.value as AppSettings['usageProvider'];
+      if (!state.settings) state.settings = {} as AppSettings;
+      state.settings.usageProvider = provider;
+      electronAPI.invoke('settings:set', { usageProvider: provider });
+      applyUsageProvider();
+    });
+  }
+
+  // 사용량 새로고침 주기
+  const usageIntervalInput = document.getElementById('setting-usage-interval') as HTMLInputElement | null;
+  if (usageIntervalInput) {
+    usageIntervalInput.value = String(state.settings?.usageRefreshIntervalSec || 300);
+    usageIntervalInput.addEventListener('change', () => {
+      const sec = parseInt(usageIntervalInput.value, 10);
+      if (sec >= 30 && sec <= 3600) {
+        if (!state.settings) state.settings = {} as AppSettings;
+        state.settings.usageRefreshIntervalSec = sec;
+        electronAPI.invoke('settings:set', { usageRefreshIntervalSec: sec });
+        applyUsageProvider(); // 새 주기로 폴링 재시작
+      }
+    });
+  }
 }
 
 // ── UI 이벤트 ──
@@ -301,6 +330,7 @@ async function init(): Promise<void> {
   initCommandPaletteEvents();
   initKeyboardShortcuts();
   initIpcCommands();
+  initUsageStatus();
 
   startPolling();
 

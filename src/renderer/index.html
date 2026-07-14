@@ -83,6 +83,12 @@
     </div>
   </div>
 
+  <!-- 하단 상태바 (AI 도구 사용량) -->
+  <div id="statusbar" class="hidden">
+    <div id="usage-status"></div>
+    <button id="btn-usage-refresh" class="icon-btn statusbar-btn" title="사용량 새로고침">↻</button>
+  </div>
+
   <!-- 커맨드 팔레트 -->
   <div id="command-palette" class="hidden">
     <div class="palette-backdrop"></div>
@@ -163,6 +169,19 @@
           <label>언어 (Language)</label>
           <select id="setting-language" class="setting-input">
           </select>
+        </div>
+        <div class="setting-group">
+          <label>사용량 표시 (하단 바)</label>
+          <select id="setting-usage-provider" class="setting-input">
+            <option value="none">표시 안 함</option>
+            <option value="claude">Claude Code</option>
+            <option value="codex">Codex</option>
+            <option value="antigravity">Antigravity</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>사용량 새로고침 주기 (초)</label>
+          <input type="number" id="setting-usage-interval" class="setting-input" min="30" max="3600" step="30">
         </div>
       </div>
     </div>

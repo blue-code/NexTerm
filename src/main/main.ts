@@ -31,6 +31,7 @@ import { PortScannerService } from './services/port-scanner-service';
 import { SessionService } from './services/session-service';
 import { AgentDetectService } from './services/agent-detect-service';
 import { BrowserHistoryService } from './services/browser-history-service';
+import { UsageService } from './services/usage-service';
 import { AuthService } from './services/auth-service';
 import { WindowManagerService } from './services/window-manager-service';
 import { IpcPipeServer } from './ipc/pipe-server';
@@ -62,6 +63,7 @@ const portScanner = new PortScannerService();
 const sessionService = new SessionService();
 const agentDetectService = new AgentDetectService();
 const browserHistoryService = new BrowserHistoryService();
+const usageService = new UsageService();
 const authService = new AuthService();
 let pipeServer: IpcPipeServer | null = null;
 let sessionSaveInterval: ReturnType<typeof setInterval> | null = null;
@@ -81,6 +83,8 @@ const defaultSettings: AppSettings = {
   defaultShell: 'powershell.exe',
   externalUrlPatterns: [],
   language: 'ko',
+  usageProvider: 'claude',
+  usageRefreshIntervalSec: 300,
 };
 
 // 설정 파일 영속화 경로
@@ -278,6 +282,12 @@ function setupIpcHandlers(): void {
     saveSettings(currentSettings);
     windowManager.broadcast('settings:changed', currentSettings);
     return currentSettings;
+  });
+
+  // AI 도구 사용량 조회 (하단 상태바)
+  ipcMain.handle(IPC_CHANNELS.USAGE_GET, (_event, opts?: { provider?: AppSettings['usageProvider']; force?: boolean }) => {
+    const provider = opts?.provider ?? currentSettings.usageProvider ?? 'none';
+    return usageService.getUsage(provider, opts?.force === true);
   });
 
   // 파일 선택 다이얼로그 (배경 이미지 등)

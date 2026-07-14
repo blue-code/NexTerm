@@ -86,6 +86,32 @@ export interface AppSettings {
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
   externalUrlPatterns: string[]; // 외부 브라우저로 열 URL 패턴 (glob 형태)
   language: string; // UI 언어 (ko, en, ja, zh)
+  // 하단 상태바에 표시할 AI 도구 사용량 제공자
+  usageProvider: UsageProviderId;
+  // 사용량 자동 새로고침 주기 (초). 제공자별 최소 간격은 main에서 별도 보호.
+  usageRefreshIntervalSec: number;
+}
+
+// ── AI 도구 사용량 (하단 상태바) ──
+
+export type UsageProviderId = 'none' | 'claude' | 'codex' | 'antigravity';
+
+/** 사용량 윈도우 1개 — 예: 5시간 세션, 주간, Antigravity 모델별 쿼터 */
+export interface UsageWindow {
+  label: string;              // '세션(5h)' | '주간' | 모델 표시명
+  usedPercent: number | null; // 0~100, 알 수 없으면 null
+  resetsAt: number | null;    // 리셋 시각 (epoch ms), 알 수 없으면 null
+}
+
+/** 제공자별 사용량 스냅샷 — main의 UsageService가 생성 */
+export interface UsageSnapshot {
+  provider: UsageProviderId;
+  ok: boolean;
+  error?: string;         // ok=false일 때 사용자 표시용 메시지
+  windows: UsageWindow[]; // ok=true일 때 1개 이상
+  updatedAt: number;      // 데이터 기준 시각 (epoch ms)
+  // codex처럼 "마지막 활동 시점" 데이터라 실시간이 아닐 수 있음을 표시
+  stale?: boolean;
 }
 
 // IPC 메시지 타입
@@ -157,6 +183,9 @@ export const IPC_CHANNELS = {
   // 키바인딩
   KEYBINDINGS_GET: 'keybindings:get',
   KEYBINDINGS_SET: 'keybindings:set',
+
+  // AI 도구 사용량 (하단 상태바)
+  USAGE_GET: 'usage:get',
 
   // 파일 (마크다운 뷰어 등)
   FILE_READ: 'file:read',

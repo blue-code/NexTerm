@@ -3,6 +3,7 @@
   --titlebar-height: 32px;
   --sidebar-width: 240px;
   --split-handle-size: 4px;
+  --statusbar-height: 26px;
   --font-mono: 'Cascadia Code', 'Consolas', 'D2Coding', monospace;
   --font-ui: 'Segoe UI', 'Malgun Gothic', sans-serif;
 }
@@ -210,6 +211,85 @@ body {
 /* ── 메인 레이아웃 ── */
 #app {
   display: flex;
+  height: calc(100vh - var(--titlebar-height));
+}
+
+/* 하단 상태바 표시 중에는 콘텐츠 높이에서 상태바만큼 제외 */
+body.has-statusbar #app {
+  height: calc(100vh - var(--titlebar-height) - var(--statusbar-height));
+}
+
+/* ── 하단 상태바 (AI 도구 사용량) ── */
+#statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--statusbar-height);
+  padding: 0 10px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#statusbar.hidden {
+  display: none;
+}
+
+#usage-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-provider {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.usage-window b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* 사용률 80% 이상 경고 강조 */
+.usage-window.usage-warn b {
+  color: var(--accent);
+}
+
+.usage-sep {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
+.usage-stale {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.statusbar-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.statusbar-btn.spinning {
+  animation: usage-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes usage-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+body.presentation-mode #statusbar {
+  display: none;
+}
+
+body.presentation-mode #app {
   height: calc(100vh - var(--titlebar-height));
 }
 

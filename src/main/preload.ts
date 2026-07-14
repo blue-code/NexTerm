@@ -26,6 +26,7 @@ const ALLOWED_INVOKE = new Set([
   'file:unwatch',
   'keybindings:get',
   'keybindings:set',
+  'usage:get',
 ]);
 
 const ALLOWED_SEND = new Set([
