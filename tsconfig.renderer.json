@@ -1,18 +1,20 @@
 {
+  // 렌더러 타입체크 전용 설정 — 번들은 esbuild(scripts/build-renderer.js)가 담당하므로 noEmit.
+  // 메인 프로세스용 tsconfig.json이 src/renderer를 제외하고 있어, 이 설정 없이는
+  // 렌더러가 타입 검증 없이 배포된다 (esbuild는 type-only import의 경로 오류도 무시함).
+  // shared를 함께 포함해야 renderer → shared 타입 참조가 검증된다 (rootDir 지정 금지).
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "outDir": "./dist/renderer",
-    "rootDir": "./src/renderer",
     "strict": true,
+    "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "moduleResolution": "bundler",
-    "sourceMap": true
+    "resolveJsonModule": true
   },
-  "include": ["src/renderer/**/*.ts"],
+  "include": ["src/renderer/**/*.ts", "src/shared/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

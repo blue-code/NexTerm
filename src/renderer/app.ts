@@ -28,7 +28,7 @@ import '../shared/locales/ko';
 import '../shared/locales/en';
 import '../shared/locales/ja';
 import '../shared/locales/zh';
-import type { AppSettings } from '../../shared/types';
+import type { AppSettings } from '../shared/types';
 
 const log = createLogger('app');
 

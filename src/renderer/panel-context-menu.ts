@@ -11,7 +11,7 @@ import {
 } from './terminal';
 import { closePanel, splitPanel, togglePanelZoom } from './workspace';
 import { toggleTerminalSearch } from './search';
-import type { PanelState } from '../../shared/types';
+import type { PanelState } from '../shared/types';
 
 interface MenuItem {
   label: string;

@@ -4,7 +4,7 @@
 import { state, electronAPI } from './state';
 import { serializeTerminalBuffer, writeScrollbackToTerminal } from './terminal';
 import { createLogger } from './logger';
-import type { PanelState, SessionSnapshot, WorkspaceState } from '../../shared/types';
+import type { PanelState, SessionSnapshot, WorkspaceState } from '../shared/types';
 
 const log = createLogger('session');
 

@@ -8,8 +8,8 @@ import type {
   WorkspaceState,
   PanelState,
   AppSettings,
-} from '../../shared/types';
-import type { AgentInfo } from '../../shared/agent-types';
+} from '../shared/types';
+import type { AgentInfo } from '../shared/agent-types';
 
 /** 닫은 브라우저 패널 복원용 엔트리 */
 export interface ClosedBrowserTab {

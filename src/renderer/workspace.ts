@@ -6,7 +6,7 @@ import { state, electronAPI, triggerSidebarRender, triggerContentRender, type Ru
 import { generateId } from './utils';
 import { splitNodeAt, removeNodeFrom, type SplitNode } from './layout';
 import { destroyTerminal } from './terminal';
-import type { PanelState } from '../../shared/types';
+import type { PanelState } from '../shared/types';
 
 // IPC 리스너 해제 함수
 let removeChildDetected: (() => void) | null = null;

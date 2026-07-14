@@ -11,7 +11,7 @@ import {
 } from './workspace';
 import { pasteTextToPanel } from './terminal';
 import { setPendingInput } from './pending-input';
-import type { IpcCommandPayload } from '../../shared/types';
+import type { IpcCommandPayload } from '../shared/types';
 
 let removeIpcCommand: (() => void) | null = null;
 

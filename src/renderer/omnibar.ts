@@ -4,7 +4,7 @@
  */
 import { electronAPI } from './state';
 import { escapeHtml } from './utils';
-import type { BrowserHistoryEntry } from '../../shared/types';
+import type { BrowserHistoryEntry } from '../shared/types';
 
 // 검색엔진 URL 템플릿 ({q}를 검색어로 치환)
 const SEARCH_ENGINE = 'https://www.google.com/search?q={q}';

@@ -1,11 +1,12 @@
 {
   "name": "nexterm",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI 코딩 에이전트를 위한 Windows 터미널 멀티플렉서",
   "main": "dist/main/main.js",
   "scripts": {
     "build:main": "tsc",
-    "build:renderer": "node scripts/build-renderer.js",
+    "typecheck:renderer": "tsc -p tsconfig.renderer.json",
+    "build:renderer": "npm run typecheck:renderer && node scripts/build-renderer.js",
     "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",

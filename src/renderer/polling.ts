@@ -4,7 +4,7 @@
  */
 import { state, electronAPI, triggerSidebarRender } from './state';
 import { createLogger } from './logger';
-import type { PanelState, GitStatusResult } from '../../shared/types';
+import type { PanelState, GitStatusResult } from '../shared/types';
 
 const log = createLogger('polling');
 

@@ -3,7 +3,7 @@
  * 패널 헤더와 사이드바에 에이전트 활성/완료 상태를 표시한다.
  */
 import { state, electronAPI, triggerSidebarRender } from './state';
-import type { AgentStatusChangePayload } from '../../shared/agent-types';
+import type { AgentStatusChangePayload } from '../shared/agent-types';
 
 /** 에이전트 상태 변경 IPC 리스너 등록 */
 export function initAgentListeners(): void {
