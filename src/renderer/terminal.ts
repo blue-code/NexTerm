@@ -9,9 +9,9 @@ import {
 import { TERMINAL_THEMES } from './themes';
 import { shouldInterceptKey } from './keyboard';
 import { createLogger } from './logger';
-import { consumeInputForHistory, dropPanelBuffer } from './command-history';
+import { consumeInputForHistory, dropPanelBuffer, markPastedInput } from './command-history';
 import { handleKeyAgainstPending, dropPendingInput } from './pending-input';
-import type { PanelState } from '../../shared/types';
+import type { PanelState } from '../shared/types';
 
 const log = createLogger('terminal');
 
@@ -136,7 +136,7 @@ export function createTerminalInstance(
       .filter(Boolean)
       .join(' ');
     if (paths) {
-      terminal.paste(paths);
+      pasteTextToPanel(panelId, paths);
       terminal.focus();
     }
   });
@@ -158,8 +158,9 @@ export function createTerminalInstance(
 
   terminal.onData((data: string) => {
     electronAPI.send('terminal:input', { id: panelId, data });
-    // 명령어 빈도 추적: 입력 스트림을 한 줄 단위로 누적
-    consumeInputForHistory(panelId, data);
+    // 명령어 빈도 추적: 입력 스트림을 한 줄 단위로 누적.
+    // 터미널 인스턴스를 넘겨 ↑/↓ 히스토리 탐색 시 화면에서 명령을 읽게 한다.
+    consumeInputForHistory(panelId, data, terminal);
   });
 
   terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
@@ -242,6 +243,34 @@ export function queueTerminalFit(inst: TerminalInst): void {
     fitTerminal(inst);
     requestAnimationFrame(() => fitTerminal(inst));
   });
+}
+
+/**
+ * DOM 재부착(reparent) 후 스크롤 위치 복원 + 뷰포트 강제 재동기화.
+ *
+ * 터미널 컨테이너를 detach → attach 하면 브라우저가 .xterm-viewport의
+ * scrollTop을 0으로 리셋하지만 xterm 내부 버퍼 위치(ydisp)는 그대로다.
+ * 이 상태에서 최하단에 있던 터미널은 휠을 올려도 scrollTop이 이미 0이라
+ * scroll 이벤트가 나지 않아 스크롤이 죽는다. xterm은 버퍼 스크롤·리사이즈·
+ * 출력이 있어야만 재동기화하므로, 재마운트 후 크기가 그대로고(fit no-op)
+ * 출력도 없는 유휴 패널은 계속 먹통으로 남는다 — "마지막 터미널 스크롤
+ * 안 됨" 증상의 원인.
+ *
+ * 같은 라인으로 scrollToLine 해봐야 ydisp가 안 바뀌어 이벤트가 없으므로,
+ * 한 줄 벗어났다가 목표 라인으로 복귀시켜 onScroll → syncScrollArea를
+ * 강제로 태워 뷰포트 DOM을 재동기화한다.
+ */
+export function restoreScrollAfterRemount(inst: TerminalInst, wasAtBottom: boolean, savedViewportY: number): void {
+  try {
+    const term = inst.terminal;
+    const buf = term.buffer.active;
+    if (buf.baseY <= 0) return; // 스크롤백이 없으면 동기화할 것도 없음
+    const target = wasAtBottom ? buf.baseY : Math.min(savedViewportY, buf.baseY);
+    term.scrollToLine(target > 0 ? target - 1 : target + 1);
+    term.scrollToLine(target);
+  } catch {
+    // 이미 dispose된 터미널 무시
+  }
 }
 
 // ── fit 디바운스: 여러 곳에서 동시 호출 시 1회만 실행 ──
@@ -386,6 +415,9 @@ export function pasteTextToPanel(panelId: string, text: string): void {
   if (!text) return;
   const inst = state.terminalInstances.get(panelId);
   if (!inst) return;
+  // paste는 사용자가 타이핑한 입력이 아니므로 명령어 빈도 통계에서 제외.
+  // paste()가 동기적으로 onData를 발생시키므로 반드시 호출 전에 마킹한다.
+  markPastedInput(panelId);
   // CRLF/LF 정규화 — 셸은 \r을 라인 종결로 처리하므로 통일
   const normalized = text.replace(/\r\n/g, '\n');
   inst.terminal.paste(normalized);

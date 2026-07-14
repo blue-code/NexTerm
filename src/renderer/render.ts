@@ -12,7 +12,7 @@ import {
   openBrowserPanel,
   renameWorkspace,
 } from './workspace';
-import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, queueTerminalFit, terminalPool } from './terminal';
+import { createTerminalInstance, fitAllTerminals, fitAllTerminalsImmediate, queueTerminalFit, restoreScrollAfterRemount, terminalPool } from './terminal';
 import { toggleTerminalSearch } from './search';
 import type { SplitNode, SplitBranch } from './layout';
 import { getWorkspaceAgentStatus } from './agent-indicator';
@@ -20,7 +20,7 @@ import { createOmnibar } from './omnibar';
 import { createMarkdownViewer } from './markdown-viewer';
 import { attachPanelContextMenu } from './panel-context-menu';
 import { refreshPendingHint } from './pending-input';
-import type { PanelState } from '../../shared/types';
+import type { PanelState } from '../shared/types';
 import type { RuntimeWorkspace } from './state';
 
 // ── 사이드바 ──
@@ -139,12 +139,13 @@ export function renderWorkspaceContent(): void {
           mount.appendChild(inst.container);
           queueTerminalFit(inst);
 
-          // display:none → visible 전환 후 스크롤 위치 복원
-          if (!wasAtBottom && term.buffer.active.baseY > 0) {
+          // 재부착으로 리셋된 뷰포트 scrollTop을 fit(2프레임) 완료 후 재동기화.
+          // 최하단 유지 케이스도 반드시 태워야 휠 스크롤 먹통이 안 생긴다.
+          requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              term.scrollToLine(Math.min(savedViewportY, term.buffer.active.baseY));
+              restoreScrollAfterRemount(inst, wasAtBottom, savedViewportY);
             });
-          }
+          });
         }
       }
     }

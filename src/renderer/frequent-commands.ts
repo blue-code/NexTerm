@@ -8,6 +8,7 @@ import {
   getTopCommands,
   deleteCommand,
   clearAllCommands,
+  recordCommand,
 } from './command-history';
 import { pasteTextToPanel } from './terminal';
 import { escapeHtml } from './utils';
@@ -179,5 +180,8 @@ function insertCommandIntoFocusedPanel(cmd: string, execute: boolean): void {
     return;
   }
   pasteTextToPanel(panelId, execute ? `${cmd}\r` : cmd);
+  // paste 경로는 빈도 추적에서 제외되므로, 팝업에서 "실행"한 경우만
+  // 직접 카운트를 올려 사용 빈도를 유지한다 (삽입만 한 경우는 미실행일 수 있어 제외)
+  if (execute) recordCommand(cmd);
   inst.terminal.focus();
 }
