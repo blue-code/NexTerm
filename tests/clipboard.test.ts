@@ -1,362 +1,134 @@
 /**
  * 복사/붙여넣기 로직 테스트
- * terminal.ts의 attachCustomKeyEventHandler 내부 Ctrl+C/V 로직을 검증한다.
+ * src/renderer/copy-paste.ts의 실제 판정 로직을 검증한다.
  *
- * 테스트 대상:
- * 1. Ctrl+C: 선택 영역 있으면 복사, 없으면 SIGINT 통과
- * 2. Ctrl+V: 텍스트 붙여넣기, 텍스트 없을 때 이미지 경로 삽입
- * 3. preload 화이트리스트 정합성 검증
+ * 단축키 정책 (v1.0.3에서 변경):
+ * 1. Ctrl+Shift+C: 복사
+ * 2. Ctrl+C: 선택 여부와 무관하게 항상 SIGINT 통과
+ * 3. Ctrl+V / Ctrl+Shift+V: 붙여넣기 (텍스트 우선, 없으면 이미지 → 임시 파일 경로)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// ── 복사/붙여넣기 핸들러 로직 추출 (순수 함수화) ──
-
-interface ClipboardAPI {
-  readText(): string;
-  writeText(text: string): void;
-  saveImageToTemp(): string | null;
-}
-
-interface TerminalLike {
-  hasSelection(): boolean;
-  getSelection(): string;
-  clearSelection(): void;
-  paste(data: string): void;
-}
-
-interface KeyEvent {
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  key: string;
-  type: string;
-  preventDefault: () => void;
-}
-
-/**
- * terminal.ts의 customKeyEventHandler 내 Ctrl+C/V 분기 로직을 재현.
- * 반환값: false = xterm에서 이벤트 소비(차단), true = xterm에 이벤트 전달
- */
-function handleCopyPaste(
-  e: KeyEvent,
-  terminal: TerminalLike,
-  clipboard: ClipboardAPI,
-): boolean {
-  if (e.type !== 'keydown') return true;
-
-  const ctrl = e.ctrlKey;
-  const shift = e.shiftKey;
-  const key = e.key;
-
-  // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT
-  if (ctrl && !shift && key.toLowerCase() === 'c') {
-    if (terminal.hasSelection()) {
-      clipboard.writeText(terminal.getSelection());
-      terminal.clearSelection();
-      return false;
-    }
-    return true; // SIGINT 전달
-  }
-
-  // Ctrl+V: 붙여넣기 (텍스트 우선, 없으면 이미지 → 임시 파일 경로 삽입)
-  // preventDefault로 브라우저 기본 paste 이벤트를 차단하여 이중 붙여넣기 방지
-  if (ctrl && key.toLowerCase() === 'v') {
-    e.preventDefault();
-    const text = clipboard.readText();
-    if (text) {
-      terminal.paste(text);
-    } else {
-      const imgPath = clipboard.saveImageToTemp();
-      if (imgPath) {
-        terminal.paste(`"${imgPath}"`);
-      }
-    }
-    return false;
-  }
-
-  return true;
-}
+import {
+  decideClipboardKey,
+  resolvePasteText,
+  type ClipboardKeyEvent,
+  type ClipboardSource,
+} from '../src/renderer/copy-paste';
 
 /** KeyEvent 모킹 헬퍼 */
-function makeKeyEvent(overrides: Partial<KeyEvent> & { ctrlKey: boolean; key: string; type: string }): KeyEvent {
+function makeKeyEvent(overrides: Partial<ClipboardKeyEvent> & { key: string }): ClipboardKeyEvent {
   return {
+    type: 'keydown',
+    ctrlKey: false,
     shiftKey: false,
-    preventDefault: vi.fn(),
     ...overrides,
   };
 }
 
-// ── 테스트 ──
+// ── 키 판정 테스트 ──
 
-describe('복사/붙여넣기 핸들러', () => {
-  let terminal: TerminalLike;
-  let clipboard: ClipboardAPI;
+describe('decideClipboardKey — 복사 (Ctrl+Shift+C)', () => {
+  it('Ctrl+Shift+C는 copy로 판정된다', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'c' });
+    expect(decideClipboardKey(e)).toBe('copy');
+  });
+
+  it('대문자 C도 copy로 판정된다', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'C' });
+    expect(decideClipboardKey(e)).toBe('copy');
+  });
+
+  it('Ctrl+C(shift 없음)는 복사가 아니라 통과(SIGINT)다', () => {
+    const e = makeKeyEvent({ ctrlKey: true, key: 'c' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+
+  it('Shift+C(ctrl 없음)는 통과다', () => {
+    const e = makeKeyEvent({ shiftKey: true, key: 'c' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+});
+
+describe('decideClipboardKey — 붙여넣기 (Ctrl+V)', () => {
+  it('Ctrl+V는 paste로 판정된다', () => {
+    const e = makeKeyEvent({ ctrlKey: true, key: 'v' });
+    expect(decideClipboardKey(e)).toBe('paste');
+  });
+
+  it('Ctrl+Shift+V도 paste로 판정된다 (shift 무관)', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'v' });
+    expect(decideClipboardKey(e)).toBe('paste');
+  });
+
+  it('대문자 V도 paste로 판정된다', () => {
+    const e = makeKeyEvent({ ctrlKey: true, key: 'V' });
+    expect(decideClipboardKey(e)).toBe('paste');
+  });
+
+  it('Ctrl 없는 V는 통과다', () => {
+    const e = makeKeyEvent({ key: 'v' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+});
+
+describe('decideClipboardKey — 비대상 이벤트', () => {
+  it('keyup 이벤트는 무조건 통과', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'c', type: 'keyup' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+
+  it('다른 Ctrl 조합(Ctrl+A 등)은 통과', () => {
+    const e = makeKeyEvent({ ctrlKey: true, key: 'a' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+
+  it('Ctrl+Shift+A 등 다른 Shift 조합도 통과', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'a' });
+    expect(decideClipboardKey(e)).toBe('pass');
+  });
+});
+
+// ── 붙여넣기 텍스트 결정 테스트 ──
+
+describe('resolvePasteText', () => {
+  let clipboard: ClipboardSource;
 
   beforeEach(() => {
-    terminal = {
-      hasSelection: vi.fn(() => false),
-      getSelection: vi.fn(() => ''),
-      clearSelection: vi.fn(),
-      paste: vi.fn(),
-    };
     clipboard = {
       readText: vi.fn(() => ''),
-      writeText: vi.fn(),
       saveImageToTemp: vi.fn(() => null),
     };
   });
 
-  // ── Ctrl+C 테스트 ──
-
-  describe('Ctrl+C (복사)', () => {
-    it('선택 영역이 있으면 클립보드에 복사하고 이벤트 차단', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (terminal.getSelection as ReturnType<typeof vi.fn>).mockReturnValue('hello world');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(clipboard.writeText).toHaveBeenCalledWith('hello world');
-      expect(terminal.clearSelection).toHaveBeenCalled();
-    });
-
-    it('선택 영역이 없으면 SIGINT 전달 (이벤트 통과)', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(false);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-      expect(clipboard.writeText).not.toHaveBeenCalled();
-    });
-
-    it('빈 선택 영역("")도 hasSelection()이 true이면 복사 수행', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (terminal.getSelection as ReturnType<typeof vi.fn>).mockReturnValue('');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(clipboard.writeText).toHaveBeenCalledWith('');
-    });
-
-    it('Ctrl+Shift+C는 복사 로직을 타지 않는다 (shift 있으면 통과)', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'c', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-      expect(clipboard.writeText).not.toHaveBeenCalled();
-    });
-
-    it('대문자 C도 정상 처리', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (terminal.getSelection as ReturnType<typeof vi.fn>).mockReturnValue('test');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'C', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(clipboard.writeText).toHaveBeenCalledWith('test');
-    });
-
-    it('멀티라인 선택 텍스트 복사', () => {
-      const multiline = 'line1\nline2\nline3';
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (terminal.getSelection as ReturnType<typeof vi.fn>).mockReturnValue(multiline);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(clipboard.writeText).toHaveBeenCalledWith(multiline);
-    });
+  it('클립보드에 텍스트가 있으면 그대로 반환한다', () => {
+    (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('pasted text');
+    expect(resolvePasteText(clipboard)).toBe('pasted text');
   });
 
-  // ── Ctrl+V 테스트 ──
-
-  describe('Ctrl+V (붙여넣기)', () => {
-    it('클립보드에 텍스트가 있으면 터미널에 붙여넣기', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('pasted text');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(terminal.paste).toHaveBeenCalledWith('pasted text');
-    });
-
-    it('클립보드 텍스트가 비어있고 이미지가 있으면 경로 삽입', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('');
-      (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue('C:\\tmp\\paste.png');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(terminal.paste).toHaveBeenCalledWith('"C:\\tmp\\paste.png"');
-    });
-
-    it('클립보드에 텍스트도 이미지도 없으면 아무것도 하지 않지만 이벤트는 차단', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('');
-      (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(terminal.paste).not.toHaveBeenCalled();
-    });
-
-    it('텍스트가 있으면 이미지 경로 확인을 하지 않는다', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('some text');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(clipboard.saveImageToTemp).not.toHaveBeenCalled();
-    });
-
-    it('대문자 V도 정상 처리', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('test');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'V', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(terminal.paste).toHaveBeenCalledWith('test');
-    });
-
-    it('Ctrl+Shift+V도 붙여넣기 동작 (shift 무관)', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('shifted paste');
-      const e = makeKeyEvent({ ctrlKey: true, shiftKey: true, key: 'v', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(false);
-      expect(terminal.paste).toHaveBeenCalledWith('shifted paste');
-    });
-
-    it('멀티라인 텍스트 붙여넣기', () => {
-      const multiline = 'line1\r\nline2\r\nline3';
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue(multiline);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(terminal.paste).toHaveBeenCalledWith(multiline);
-    });
-
-    it('이미지 경로에 공백이 포함되어도 따옴표로 감싸짐', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('');
-      (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue('C:\\Users\\My User\\tmp\\paste.png');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(terminal.paste).toHaveBeenCalledWith('"C:\\Users\\My User\\tmp\\paste.png"');
-    });
+  it('텍스트가 있으면 이미지 경로 확인을 하지 않는다', () => {
+    (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('some text');
+    resolvePasteText(clipboard);
+    expect(clipboard.saveImageToTemp).not.toHaveBeenCalled();
   });
 
-  // ── 이중 붙여넣기 방지 테스트 ──
-
-  describe('이중 붙여넣기 방지 (preventDefault)', () => {
-    it('Ctrl+V 시 preventDefault가 호출되어 브라우저 기본 paste 이벤트를 차단한다', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('text');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(e.preventDefault).toHaveBeenCalledTimes(1);
-    });
-
-    it('Ctrl+V 시 terminal.paste는 정확히 1회만 호출된다', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('single paste');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(terminal.paste).toHaveBeenCalledTimes(1);
-      expect(terminal.paste).toHaveBeenCalledWith('single paste');
-    });
-
-    it('이미지 붙여넣기에서도 preventDefault가 호출된다', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('');
-      (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue('C:\\tmp\\img.png');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(e.preventDefault).toHaveBeenCalledTimes(1);
-      expect(terminal.paste).toHaveBeenCalledTimes(1);
-    });
-
-    it('빈 클립보드에서도 preventDefault가 호출된다 (브라우저 paste 이벤트 원천 차단)', () => {
-      (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue('');
-      (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'v', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(e.preventDefault).toHaveBeenCalledTimes(1);
-      expect(terminal.paste).not.toHaveBeenCalled();
-    });
-
-    it('Ctrl+C 시에는 preventDefault가 호출되지 않는다 (복사는 브라우저 paste 이벤트와 무관)', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (terminal.getSelection as ReturnType<typeof vi.fn>).mockReturnValue('text');
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(e.preventDefault).not.toHaveBeenCalled();
-    });
-
-    it('비대상 키에서는 preventDefault가 호출되지 않는다', () => {
-      const e = makeKeyEvent({ ctrlKey: true, key: 'a', type: 'keydown' });
-
-      handleCopyPaste(e, terminal, clipboard);
-
-      expect(e.preventDefault).not.toHaveBeenCalled();
-    });
+  it('텍스트가 비어있고 이미지가 있으면 따옴표로 감싼 경로를 반환한다', () => {
+    (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue('C:\\tmp\\paste.png');
+    expect(resolvePasteText(clipboard)).toBe('"C:\\tmp\\paste.png"');
   });
 
-  // ── 비대상 이벤트 통과 테스트 ──
+  it('이미지 경로에 공백이 포함되어도 따옴표로 감싸진다', () => {
+    (clipboard.saveImageToTemp as ReturnType<typeof vi.fn>).mockReturnValue('C:\\Users\\My User\\tmp\\paste.png');
+    expect(resolvePasteText(clipboard)).toBe('"C:\\Users\\My User\\tmp\\paste.png"');
+  });
 
-  describe('비대상 이벤트', () => {
-    it('keyup 이벤트는 무조건 통과', () => {
-      (terminal.hasSelection as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      const e = makeKeyEvent({ ctrlKey: true, key: 'c', type: 'keyup' });
+  it('텍스트도 이미지도 없으면 null을 반환한다', () => {
+    expect(resolvePasteText(clipboard)).toBeNull();
+  });
 
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-    });
-
-    it('Ctrl 없는 일반 C 키는 통과', () => {
-      const e = makeKeyEvent({ ctrlKey: false, key: 'c', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-    });
-
-    it('Ctrl 없는 일반 V 키는 통과', () => {
-      const e = makeKeyEvent({ ctrlKey: false, key: 'v', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-    });
-
-    it('다른 Ctrl 조합(Ctrl+A 등)은 통과', () => {
-      const e = makeKeyEvent({ ctrlKey: true, key: 'a', type: 'keydown' });
-
-      const result = handleCopyPaste(e, terminal, clipboard);
-
-      expect(result).toBe(true);
-    });
+  it('멀티라인 텍스트도 그대로 반환한다', () => {
+    const multiline = 'line1\r\nline2\r\nline3';
+    (clipboard.readText as ReturnType<typeof vi.fn>).mockReturnValue(multiline);
+    expect(resolvePasteText(clipboard)).toBe(multiline);
   });
 });
 

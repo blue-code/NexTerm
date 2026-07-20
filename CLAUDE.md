@@ -87,7 +87,7 @@ CSS 변수(`data-theme` 속성) + xterm 터미널 색상 동시 전환. `styles.
 
 - 렌더러에서 `require('electron')` 사용 불가 → `electronAPI` 사용
 - 새 IPC 채널 추가 시 `preload.ts`의 `ALLOWED_*` Set에 반드시 등록
-- xterm.js 관련 Ctrl+C/V는 `terminal.ts`의 DOM `keydown` 리스너에서 처리 (customKeyEventHandler 아님)
+- 터미널 복사는 **Ctrl+Shift+C**, 붙여넣기는 Ctrl+V. Ctrl+C는 항상 SIGINT로 전달. 키 판정 로직은 `src/renderer/copy-paste.ts`(순수 함수), 실제 처리는 `terminal.ts`의 `attachCustomKeyEventHandler`
 - `node-pty`는 `asar` 언팩 필요 (`asarUnpack` 설정 참고)
 - 설정은 `%APPDATA%/nexterm/settings.json`에 영속화
 - 세션은 `%APPDATA%/nexterm/session.json`에 저장 (24시간 만료)

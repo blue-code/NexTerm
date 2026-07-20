@@ -5,7 +5,8 @@
  * 주기적으로(usageRefreshIntervalSec) main에 조회해 표시한다.
  * ↻ 버튼으로 즉시 새로고침(force) 가능 — main 쪽에서 30초 하한으로 보호된다.
  *
- * provider가 'none'이면 상태바 자체를 숨기고 레이아웃 높이를 되돌린다.
+ * 상태바 자체는 항상 표시한다 (복사/붙여넣기 단축키 안내를 상시 노출해야 하므로).
+ * provider가 'none'이면 사용량 영역과 새로고침 버튼만 숨긴다.
  */
 import { state, electronAPI } from './state';
 import { fitAllTerminals } from './terminal';
@@ -45,14 +46,17 @@ export function initUsageStatus(): void {
   applyUsageProvider();
 }
 
-/** 설정 변경(제공자/주기) 시 호출 — 표시 토글 + 폴링 재시작 */
+/** 설정 변경(제공자/주기) 시 호출 — 사용량 영역 토글 + 폴링 재시작 */
 export function applyUsageProvider(): void {
   const bar = document.getElementById('statusbar');
   const visible = currentProvider() !== 'none';
 
-  document.body.classList.toggle('has-statusbar', visible);
-  bar?.classList.toggle('hidden', !visible);
-  // 상태바 표시/숨김으로 콘텐츠 높이가 변하므로 터미널 재계산
+  // 상태바는 단축키 안내 때문에 항상 표시, 사용량 영역만 제공자 설정에 따라 토글
+  document.body.classList.add('has-statusbar');
+  bar?.classList.remove('hidden');
+  document.getElementById('usage-status')?.classList.toggle('hidden', !visible);
+  document.getElementById('btn-usage-refresh')?.classList.toggle('hidden', !visible);
+  // 상태바 표시로 콘텐츠 높이가 변할 수 있으므로 터미널 재계산
   fitAllTerminals();
 
   stopPolling();

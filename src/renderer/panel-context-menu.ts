@@ -3,11 +3,10 @@
  * 터미널/브라우저/마크다운 패널에서 우클릭 시 표시되는 액션 메뉴.
  * 메뉴 항목은 패널 타입과 선택 상태에 따라 동적으로 구성된다.
  */
-import { state } from './state';
+import { state, electronAPI } from './state';
 import {
-  copySelectionFromPanel,
   pasteFromClipboardToPanel,
-  sendSelectionAsInput,
+  pasteTextToPanel,
 } from './terminal';
 import { closePanel, splitPanel, togglePanelZoom } from './workspace';
 import { toggleTerminalSearch } from './search';
@@ -111,9 +110,15 @@ function closeExistingMenus(): void {
 /** 패널 영역 우클릭 핸들러 등록 */
 export function attachPanelContextMenu(pane: HTMLElement, panel: PanelState): void {
   pane.addEventListener('contextmenu', (e) => {
-    // textarea/input 위에서는 브라우저 기본 메뉴를 사용하도록 양보
+    // textarea/input 위에서는 브라우저 기본 메뉴를 사용하도록 양보.
+    // 단, xterm의 숨은 helper textarea는 예외 — 터미널 우클릭 시 이벤트 타깃이
+    // 이 textarea가 되는데, 여기서 양보하면 네이티브 메뉴가 뜨고 그 "복사"는
+    // xterm 내부 선택(DOM 선택이 아님)을 읽지 못해 아무것도 복사되지 않는다.
     const target = e.target as HTMLElement;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+    if (target && (
+      target.tagName === 'INPUT' ||
+      (target.tagName === 'TEXTAREA' && !target.classList.contains('xterm-helper-textarea'))
+    )) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -135,15 +140,20 @@ function buildMenuForPanel(panel: PanelState): MenuItem[] {
 
 function buildTerminalMenu(panel: PanelState): MenuItem[] {
   const inst = state.terminalInstances.get(panel.id);
-  const hasSelection = !!inst?.terminal.hasSelection();
+  // 메뉴가 떠 있는 사이 클릭/포커스 이동으로 선택이 풀릴 수 있으므로
+  // 메뉴 생성 시점의 선택 텍스트를 캡처해 두고 액션에서 이것을 사용한다.
+  const selectedText = inst?.terminal.getSelection() || '';
   const zoomed = state.zoomedPanelId === panel.id;
 
   return [
     {
       label: '복사',
-      shortcut: 'Ctrl+C',
-      disabled: !hasSelection,
-      action: () => copySelectionFromPanel(panel.id),
+      shortcut: 'Ctrl+Shift+C',
+      disabled: !selectedText,
+      action: () => {
+        electronAPI.clipboard.writeText(selectedText);
+        inst?.terminal.clearSelection();
+      },
     },
     {
       label: '붙여넣기',
@@ -156,8 +166,12 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
     { label: '', separator: true },
     {
       label: '선택 영역 입력으로 전송',
-      disabled: !hasSelection,
-      action: () => sendSelectionAsInput(panel.id),
+      disabled: !selectedText,
+      action: () => {
+        pasteTextToPanel(panel.id, selectedText);
+        inst?.terminal.clearSelection();
+        inst?.terminal.focus();
+      },
     },
     {
       label: '모두 선택',

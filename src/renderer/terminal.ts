@@ -8,6 +8,7 @@ import {
 } from './state';
 import { TERMINAL_THEMES } from './themes';
 import { shouldInterceptKey } from './keyboard';
+import { decideClipboardKey, resolvePasteText } from './copy-paste';
 import { createLogger } from './logger';
 import { consumeInputForHistory, dropPanelBuffer, markPastedInput } from './command-history';
 import { handleKeyAgainstPending, dropPendingInput } from './pending-input';
@@ -71,9 +72,6 @@ export function createTerminalInstance(
   // 앱 단축키를 xterm보다 먼저 처리
   terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
     if (e.type !== 'keydown') return true;
-    const ctrl = e.ctrlKey;
-    const shift = e.shiftKey;
-    const key = e.key;
 
     // 보류된 "다음 명령" 제안이 있다면 키 입력에 따라 처리한다.
     // consumed: 키를 PTY로 전달하지 않음(이미 처리됨)
@@ -87,18 +85,15 @@ export function createTerminalInstance(
     }
     // 그 외(committed/discarded/pass)는 기존 단축키·xterm 처리로 흘려보냄
 
-    // Ctrl+C: 선택 영역이 있으면 복사, 없으면 SIGINT
-    if (ctrl && !shift && key.toLowerCase() === 'c') {
-      if (terminal.hasSelection()) {
-        copySelectionFromPanel(panelId);
-        return false;
-      }
-      return true; // SIGINT 전달
+    // 복사/붙여넣기 판정 — Ctrl+Shift+C 복사, Ctrl+C는 항상 SIGINT (copy-paste.ts 참고)
+    const clipDecision = decideClipboardKey(e);
+    if (clipDecision === 'copy') {
+      e.preventDefault();
+      copySelectionFromPanel(panelId);
+      return false; // 선택이 없어도 ^C가 셸로 새지 않게 차단
     }
-
-    // Ctrl+V: 붙여넣기 (텍스트 우선, 없으면 이미지 → 임시 파일 경로 삽입)
-    // preventDefault로 브라우저 기본 paste 이벤트를 차단하여 이중 붙여넣기 방지
-    if (ctrl && key.toLowerCase() === 'v') {
+    if (clipDecision === 'paste') {
+      // preventDefault로 브라우저 기본 paste 이벤트를 차단하여 이중 붙여넣기 방지
       e.preventDefault();
       pasteFromClipboardToPanel(panelId);
       return false;
@@ -109,6 +104,27 @@ export function createTerminalInstance(
 
     return true;
   });
+
+  // 휠 스크롤 자가 복구 안전망.
+  // 레이아웃 재렌더·버퍼 전환 등으로 .xterm-viewport의 scrollTop(DOM)이 0으로
+  // 리셋되는데 xterm 내부 위치(viewportY)는 그대로인 desync가 생기면, scrollTop이
+  // 이미 0이라 휠을 올려도 scroll 이벤트가 없어 스크롤이 조용히 죽는다.
+  // (재마운트 경로는 restoreScrollAfterRemount로 복구하지만, AI 도구 사용 중
+  // 잦은 재렌더 타이밍에 따라 빠져나가는 경로가 남아 있어 휠 입력 순간에 감지·복구한다.)
+  container.addEventListener('wheel', () => {
+    try {
+      const buf = terminal.buffer.active;
+      if (buf.viewportY <= 0) return; // 내부 위치가 최상단이면 scrollTop 0이 정상
+      const vp = container.querySelector('.xterm-viewport') as HTMLElement | null;
+      if (!vp || vp.scrollTop > 0) return;
+      // desync 감지 → 내부 위치 기준으로 DOM scrollTop을 즉시 재동기화.
+      // 이후 브라우저가 이번 휠 델타를 보정된 위치에서 적용한다.
+      const cellHeight = vp.scrollHeight / Math.max(1, buf.length);
+      vp.scrollTop = buf.viewportY * cellHeight;
+    } catch {
+      // dispose 경합 무시
+    }
+  }, { capture: true, passive: true });
 
   // 파일 드래그 앤 드롭 → 파일 경로 삽입
   container.addEventListener('dragover', (e) => {
@@ -427,14 +443,9 @@ export function pasteTextToPanel(panelId: string, text: string): void {
 export function pasteFromClipboardToPanel(panelId: string): void {
   const inst = state.terminalInstances.get(panelId);
   if (!inst) return;
-  const text = electronAPI.clipboard.readText();
+  const text = resolvePasteText(electronAPI.clipboard);
   if (text) {
     pasteTextToPanel(panelId, text);
-    return;
-  }
-  const imgPath = electronAPI.clipboard.saveImageToTemp();
-  if (imgPath) {
-    pasteTextToPanel(panelId, `"${imgPath}"`);
   }
 }
 

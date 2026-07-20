@@ -219,7 +219,7 @@ body.has-statusbar #app {
   height: calc(100vh - var(--titlebar-height) - var(--statusbar-height));
 }
 
-/* ── 하단 상태바 (AI 도구 사용량) ── */
+/* ── 하단 상태바 (단축키 안내 + AI 도구 사용량) ── */
 #statusbar {
   display: flex;
   align-items: center;
@@ -238,12 +238,44 @@ body.has-statusbar #app {
   display: none;
 }
 
+/* 복사/붙여넣기 단축키 안내 — 사용량 표시 여부와 무관하게 항상 노출 */
+#statusbar-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
+}
+
+#statusbar-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 5px;
+  line-height: 16px;
+}
+
+#statusbar-hint .hint-sep {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
 #usage-status {
   display: flex;
   align-items: center;
   gap: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#usage-status.hidden,
+#btn-usage-refresh.hidden {
+  display: none;
 }
 
 .usage-provider {
