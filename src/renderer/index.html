@@ -10,6 +10,7 @@
 <body>
   <!-- 커스텀 타이틀바 -->
   <div id="titlebar">
+    <button id="btn-toggle-sidebar" class="titlebar-btn" title="사이드바 접기/펼치기 (Ctrl+B)">☰</button>
     <div id="titlebar-drag">
       <span class="titlebar-title">NexTerm</span>
     </div>
@@ -172,13 +173,10 @@
           </select>
         </div>
         <div class="setting-group">
-          <label>사용량 표시 (하단 바)</label>
-          <select id="setting-usage-provider" class="setting-input">
-            <option value="none">표시 안 함</option>
-            <option value="claude">Claude Code</option>
-            <option value="codex">Codex</option>
-            <option value="antigravity">Antigravity</option>
-          </select>
+          <label class="setting-checkbox-label">
+            <input type="checkbox" id="setting-usage-enabled">
+            사용량 표시 (하단 바) — Claude Code / Codex / Antigravity 모두 표시
+          </label>
         </div>
         <div class="setting-group">
           <label>사용량 새로고침 주기 (초)</label>

@@ -86,8 +86,8 @@ export interface AppSettings {
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
   externalUrlPatterns: string[]; // 외부 브라우저로 열 URL 패턴 (glob 형태)
   language: string; // UI 언어 (ko, en, ja, zh)
-  // 하단 상태바에 표시할 AI 도구 사용량 제공자
-  usageProvider: UsageProviderId;
+  // 하단 상태바에 AI 도구 사용량 영역을 표시할지 여부
+  usageEnabled: boolean;
   // 사용량 자동 새로고침 주기 (초). 제공자별 최소 간격은 main에서 별도 보호.
   usageRefreshIntervalSec: number;
 }
@@ -95,6 +95,9 @@ export interface AppSettings {
 // ── AI 도구 사용량 (하단 상태바) ──
 
 export type UsageProviderId = 'none' | 'claude' | 'codex' | 'antigravity';
+
+// 하단 상태바에 항상 함께 표시하는 지원 제공자 목록 (설정에서 개별 선택하지 않음)
+export const USAGE_PROVIDERS: readonly UsageProviderId[] = ['claude', 'codex', 'antigravity'];
 
 /** 사용량 윈도우 1개 — 예: 5시간 세션, 주간, Antigravity 모델별 쿼터 */
 export interface UsageWindow {

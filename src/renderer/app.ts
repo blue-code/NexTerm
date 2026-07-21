@@ -21,7 +21,7 @@ import { restoreSession, initSessionListeners } from './session';
 import { initIpcCommands } from './ipc-commands';
 import { initAgentListeners } from './agent-indicator';
 import { toggleFrequentCommands } from './frequent-commands';
-import { initUsageStatus, applyUsageProvider } from './usage-status';
+import { initUsageStatus, applyUsageVisibility } from './usage-status';
 import { createLogger } from './logger';
 import { setLocale, getSupportedLocales } from '../shared/i18n';
 // 로케일 등록 (import 시 자동 실행)
@@ -54,6 +54,7 @@ function toggleSidebar(): void {
 
 setToggleSidebar(toggleSidebar);
 setToggleSidebarHandler(toggleSidebar);
+document.getElementById('btn-toggle-sidebar')?.addEventListener('click', toggleSidebar);
 
 // ── 설정 UI 바인딩 ──
 
@@ -208,16 +209,16 @@ async function initSettings(): Promise<void> {
     });
   }
 
-  // 사용량 표시 제공자 (하단 상태바)
-  const usageSelect = document.getElementById('setting-usage-provider') as HTMLSelectElement | null;
-  if (usageSelect) {
-    usageSelect.value = state.settings?.usageProvider || 'none';
-    usageSelect.addEventListener('change', () => {
-      const provider = usageSelect.value as AppSettings['usageProvider'];
+  // 사용량 표시 여부 (하단 상태바) — Claude Code/Codex/Antigravity 사용량을 항상 함께 표시
+  const usageEnabledInput = document.getElementById('setting-usage-enabled') as HTMLInputElement | null;
+  if (usageEnabledInput) {
+    usageEnabledInput.checked = state.settings?.usageEnabled ?? true;
+    usageEnabledInput.addEventListener('change', () => {
+      const enabled = usageEnabledInput.checked;
       if (!state.settings) state.settings = {} as AppSettings;
-      state.settings.usageProvider = provider;
-      electronAPI.invoke('settings:set', { usageProvider: provider });
-      applyUsageProvider();
+      state.settings.usageEnabled = enabled;
+      electronAPI.invoke('settings:set', { usageEnabled: enabled });
+      applyUsageVisibility();
     });
   }
 
@@ -231,7 +232,7 @@ async function initSettings(): Promise<void> {
         if (!state.settings) state.settings = {} as AppSettings;
         state.settings.usageRefreshIntervalSec = sec;
         electronAPI.invoke('settings:set', { usageRefreshIntervalSec: sec });
-        applyUsageProvider(); // 새 주기로 폴링 재시작
+        applyUsageVisibility(); // 새 주기로 폴링 재시작
       }
     });
   }

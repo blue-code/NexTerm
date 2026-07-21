@@ -196,6 +196,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-app-region: no-drag;
 }
 
 .titlebar-btn:hover {
@@ -281,6 +282,22 @@ body.has-statusbar #app {
 .usage-provider {
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.usage-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 로그인/실행 기록이 없어 조회 실패한 제공자 — 흐리게 표시, 사유는 title 툴팁 */
+.usage-group.usage-error {
+  opacity: 0.5;
+}
+
+.usage-provider-sep {
+  color: var(--text-muted);
+  margin: 0 2px;
 }
 
 .usage-window b {
@@ -989,6 +1006,14 @@ body.presentation-mode #app {
 
 .setting-input:focus {
   border-color: var(--accent);
+}
+
+.setting-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
 }
 
 /* 폰트 프리뷰 */

@@ -41,6 +41,7 @@ import {
   WorkspaceState,
   SplitLeaf,
   AppSettings,
+  UsageProviderId,
 } from '../shared/types';
 
 // 싱글 인스턴스 보장
@@ -83,7 +84,7 @@ const defaultSettings: AppSettings = {
   defaultShell: 'powershell.exe',
   externalUrlPatterns: [],
   language: 'ko',
-  usageProvider: 'claude',
+  usageEnabled: true,
   usageRefreshIntervalSec: 300,
 };
 
@@ -284,9 +285,9 @@ function setupIpcHandlers(): void {
     return currentSettings;
   });
 
-  // AI 도구 사용량 조회 (하단 상태바)
-  ipcMain.handle(IPC_CHANNELS.USAGE_GET, (_event, opts?: { provider?: AppSettings['usageProvider']; force?: boolean }) => {
-    const provider = opts?.provider ?? currentSettings.usageProvider ?? 'none';
+  // AI 도구 사용량 조회 (하단 상태바) — 렌더러가 제공자별로 개별 호출한다
+  ipcMain.handle(IPC_CHANNELS.USAGE_GET, (_event, opts?: { provider?: UsageProviderId; force?: boolean }) => {
+    const provider = opts?.provider ?? 'none';
     return usageService.getUsage(provider, opts?.force === true);
   });
 

@@ -1,17 +1,19 @@
 /**
  * 하단 상태바 — AI 도구 사용량 표시
  *
- * 설정(usageProvider)에서 지정한 제공자의 사용량/남은 시간/주간 사용량을
- * 주기적으로(usageRefreshIntervalSec) main에 조회해 표시한다.
- * ↻ 버튼으로 즉시 새로고침(force) 가능 — main 쪽에서 30초 하한으로 보호된다.
+ * 지원하는 3개 제공자(Claude Code / Codex / Antigravity)의 사용량을 항상 함께 조회해
+ * 나란히 표시한다 (설정에서 개별 선택하지 않음, usageEnabled로 전체 on/off만 제어).
+ * 로그인/실행 기록이 없어 조회 실패한 제공자는 흐리게 표시하고 사유는 title 툴팁으로 노출한다.
+ * ↻ 버튼으로 즉시 새로고침(force) 가능 — main 쪽에서 제공자별 최소 간격으로 보호된다.
  *
  * 상태바 자체는 항상 표시한다 (복사/붙여넣기 단축키 안내를 상시 노출해야 하므로).
- * provider가 'none'이면 사용량 영역과 새로고침 버튼만 숨긴다.
+ * usageEnabled가 false면 사용량 영역과 새로고침 버튼만 숨긴다.
  */
 import { state, electronAPI } from './state';
 import { fitAllTerminals } from './terminal';
 import { formatRemaining, formatPercent } from '../shared/usage-format';
 import { escapeHtml } from './utils';
+import { USAGE_PROVIDERS } from '../shared/types';
 import type { UsageProviderId, UsageSnapshot } from '../shared/types';
 
 const PROVIDER_LABELS: Record<UsageProviderId, string> = {
@@ -26,11 +28,11 @@ const MIN_INTERVAL_SEC = 30;
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let repaintTimer: ReturnType<typeof setInterval> | null = null;
-let lastSnapshot: UsageSnapshot | null = null;
+let lastSnapshots: UsageSnapshot[] = [];
 let refreshing = false;
 
-function currentProvider(): UsageProviderId {
-  return (state.settings?.usageProvider as UsageProviderId) || 'none';
+function usageEnabled(): boolean {
+  return state.settings?.usageEnabled ?? true;
 }
 
 function currentIntervalMs(): number {
@@ -43,15 +45,15 @@ export function initUsageStatus(): void {
   document.getElementById('btn-usage-refresh')?.addEventListener('click', () => {
     void refreshUsage(true);
   });
-  applyUsageProvider();
+  applyUsageVisibility();
 }
 
-/** 설정 변경(제공자/주기) 시 호출 — 사용량 영역 토글 + 폴링 재시작 */
-export function applyUsageProvider(): void {
+/** 설정 변경(표시 여부/주기) 시 호출 — 사용량 영역 토글 + 폴링 재시작 */
+export function applyUsageVisibility(): void {
   const bar = document.getElementById('statusbar');
-  const visible = currentProvider() !== 'none';
+  const visible = usageEnabled();
 
-  // 상태바는 단축키 안내 때문에 항상 표시, 사용량 영역만 제공자 설정에 따라 토글
+  // 상태바는 단축키 안내 때문에 항상 표시, 사용량 영역만 설정에 따라 토글
   document.body.classList.add('has-statusbar');
   bar?.classList.remove('hidden');
   document.getElementById('usage-status')?.classList.toggle('hidden', !visible);
@@ -65,7 +67,7 @@ export function applyUsageProvider(): void {
     schedule();
     // 남은 시간 표시가 폴링 주기 사이에 낡지 않도록 1분마다 재계산해 다시 그린다
     repaintTimer = setInterval(() => {
-      if (lastSnapshot) renderSnapshot(lastSnapshot);
+      if (lastSnapshots.length > 0) renderSnapshots(lastSnapshots);
     }, 60_000);
   }
 }
@@ -89,33 +91,45 @@ function stopPolling(): void {
 }
 
 async function refreshUsage(force: boolean): Promise<void> {
-  const provider = currentProvider();
-  if (provider === 'none' || refreshing) return;
+  if (!usageEnabled() || refreshing) return;
 
   refreshing = true;
   const btn = document.getElementById('btn-usage-refresh');
   btn?.classList.add('spinning');
   try {
-    const snapshot = await electronAPI.invoke('usage:get', { provider, force }) as UsageSnapshot;
-    lastSnapshot = snapshot;
-    renderSnapshot(snapshot);
+    const snapshots = await Promise.all(
+      USAGE_PROVIDERS.map((provider) =>
+        electronAPI.invoke('usage:get', { provider, force }) as Promise<UsageSnapshot>,
+      ),
+    );
+    lastSnapshots = snapshots;
+    renderSnapshots(snapshots);
   } catch {
-    renderText(`${PROVIDER_LABELS[provider]} · 사용량 조회 실패`);
+    renderText('사용량 조회 실패');
   } finally {
     refreshing = false;
     btn?.classList.remove('spinning');
   }
 }
 
-function renderSnapshot(snap: UsageSnapshot): void {
+function renderSnapshots(snapshots: UsageSnapshot[]): void {
+  const now = Date.now();
+  const groups = snapshots.map((snap) => renderGroup(snap, now));
+
+  const el = document.getElementById('usage-status');
+  if (!el) return;
+  el.innerHTML = groups.join('<span class="usage-provider-sep">|</span>');
+}
+
+/** 제공자 1개의 상태바 조각 HTML — 조회 실패 시 흐리게 표시하고 사유는 title에 담는다 */
+function renderGroup(snap: UsageSnapshot, now: number): string {
   const providerLabel = PROVIDER_LABELS[snap.provider] || snap.provider;
 
   if (!snap.ok) {
-    renderText(`${providerLabel} · ${snap.error || '사용량 정보 없음'}`);
-    return;
+    const reason = escapeHtml(snap.error || '연결되지 않음');
+    return `<span class="usage-group usage-error" title="${reason}"><span class="usage-provider">${escapeHtml(providerLabel)}</span></span>`;
   }
 
-  const now = Date.now();
   const parts = snap.windows.map((w) => {
     const pct = formatPercent(w.usedPercent);
     const reset = w.resetsAt !== null ? ` (${formatRemaining(w.resetsAt - now)} 후 리셋)` : '';
@@ -128,10 +142,7 @@ function renderSnapshot(snap: UsageSnapshot): void {
     ? `<span class="usage-stale" title="마지막 활동 시점 기준 데이터">${escapeHtml(formatRemaining(now - snap.updatedAt))} 전 기준</span>`
     : '';
 
-  const el = document.getElementById('usage-status');
-  if (el) {
-    el.innerHTML = `<span class="usage-provider">${escapeHtml(providerLabel)}</span>${parts.join('<span class="usage-sep">·</span>')}${staleNote}`;
-  }
+  return `<span class="usage-group"><span class="usage-provider">${escapeHtml(providerLabel)}</span>${parts.join('<span class="usage-sep">·</span>')}${staleNote}</span>`;
 }
 
 function renderText(text: string): void {
