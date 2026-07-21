@@ -1016,6 +1016,27 @@ body.presentation-mode #app {
   cursor: pointer;
 }
 
+.setting-group-column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.setting-group-column > label:first-child {
+  margin-bottom: 8px;
+}
+
+.setting-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-checkbox-group .setting-checkbox-label {
+  width: auto;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
 /* 폰트 프리뷰 */
 .font-preview-text {
   width: 100%;

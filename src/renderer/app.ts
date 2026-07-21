@@ -209,16 +209,21 @@ async function initSettings(): Promise<void> {
     });
   }
 
-  // 사용량 표시 여부 (하단 상태바) — Claude Code/Codex/Antigravity 사용량을 항상 함께 표시
-  const usageEnabledInput = document.getElementById('setting-usage-enabled') as HTMLInputElement | null;
-  if (usageEnabledInput) {
-    usageEnabledInput.checked = state.settings?.usageEnabled ?? true;
-    usageEnabledInput.addEventListener('change', () => {
-      const enabled = usageEnabledInput.checked;
-      if (!state.settings) state.settings = {} as AppSettings;
-      state.settings.usageEnabled = enabled;
-      electronAPI.invoke('settings:set', { usageEnabled: enabled });
-      applyUsageVisibility();
+  // 사용량 표시 항목 선택 (하단 상태바) — 체크한 제공자만 조회/표시
+  const usageProviderCheckboxes = document.querySelectorAll<HTMLInputElement>('.usage-provider-checkbox');
+  if (usageProviderCheckboxes.length > 0) {
+    const visible = new Set(state.settings?.usageVisibleProviders ?? ['claude']);
+    usageProviderCheckboxes.forEach((cb) => {
+      cb.checked = visible.has(cb.value as AppSettings['usageVisibleProviders'][number]);
+      cb.addEventListener('change', () => {
+        const selected = Array.from(usageProviderCheckboxes)
+          .filter((c) => c.checked)
+          .map((c) => c.value) as AppSettings['usageVisibleProviders'];
+        if (!state.settings) state.settings = {} as AppSettings;
+        state.settings.usageVisibleProviders = selected;
+        electronAPI.invoke('settings:set', { usageVisibleProviders: selected });
+        applyUsageVisibility();
+      });
     });
   }
 
