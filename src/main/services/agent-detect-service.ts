@@ -48,6 +48,15 @@ const DEFAULT_PATTERNS: AgentPattern[] = [
     completionPatterns: [/gemini>\s*$/],
     exitPatterns: [/goodbye/i],
   },
+  {
+    name: 'Antigravity',
+    // 시작 배너 "Antigravity CLI x.x.x"로 식별. 입력 대기 시 반복 표시되는
+    // "? for shortcuts" 힌트를 완료 신호로 사용(응답이 끝나고 프롬프트로 복귀할 때 재출력).
+    // 종료 문구는 확인되지 않아 exitPatterns 없이 유휴 타이머(idle timeout)에 의존한다.
+    identifyPatterns: [/antigravity\s+cli/i],
+    completionPatterns: [/\?\s+for\s+shortcuts/i],
+    exitPatterns: [],
+  },
 ];
 
 // 패널별 내부 상태

@@ -159,6 +159,32 @@ describe('AgentDetectService', () => {
     });
   });
 
+  // ── Antigravity 감지 ──
+
+  describe('Antigravity 감지', () => {
+    it('시작 배너 "Antigravity CLI x.x.x"로 활성화를 감지한다', () => {
+      service.feed('p4', '      Antigravity CLI 1.1.4\n');
+      expect(statusChanges).toHaveLength(1);
+      expect(statusChanges[0].agentName).toBe('Antigravity');
+    });
+
+    it('"? for shortcuts" 힌트 재출력으로 완료를 감지한다', () => {
+      service.feed('p4', 'Antigravity CLI 1.1.4\n');
+      service.feed('p4', '? for shortcuts\n');
+      expect(statusChanges).toHaveLength(2);
+      expect(statusChanges[1]).toEqual({
+        panelId: 'p4',
+        status: 'completed',
+        agentName: 'Antigravity',
+      });
+    });
+
+    it('일반 "antigravity" 단어만으로는 활성화하지 않는다', () => {
+      service.feed('p1', 'npm install antigravity-utils\n');
+      expect(statusChanges).toHaveLength(0);
+    });
+  });
+
   // ── 상태 전이 ──
 
   describe('상태 전이', () => {

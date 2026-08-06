@@ -84,7 +84,7 @@ const defaultSettings: AppSettings = {
   defaultShell: 'powershell.exe',
   externalUrlPatterns: [],
   language: 'ko',
-  usageVisibleProviders: ['claude'],
+  usageAutoDetectEnabled: true,
   usageRefreshIntervalSec: 300,
 };
 

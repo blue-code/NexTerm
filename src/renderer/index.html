@@ -172,13 +172,11 @@
           <select id="setting-language" class="setting-input">
           </select>
         </div>
-        <div class="setting-group setting-group-column">
-          <label>사용량 표시 (하단 바) — 표시할 항목 선택</label>
-          <div id="setting-usage-providers" class="setting-checkbox-group">
-            <label class="setting-checkbox-label"><input type="checkbox" class="usage-provider-checkbox" value="claude">Claude Code</label>
-            <label class="setting-checkbox-label"><input type="checkbox" class="usage-provider-checkbox" value="codex">Codex</label>
-            <label class="setting-checkbox-label"><input type="checkbox" class="usage-provider-checkbox" value="antigravity">Antigravity</label>
-          </div>
+        <div class="setting-group">
+          <label class="setting-checkbox-label">
+            <input type="checkbox" id="setting-usage-auto-detect">
+            사용량 표시 (하단 바) — 터미널에서 사용 중인 AI만 자동 표시
+          </label>
         </div>
         <div class="setting-group">
           <label>사용량 새로고침 주기 (초)</label>
