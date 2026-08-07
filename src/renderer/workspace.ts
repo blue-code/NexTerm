@@ -80,6 +80,11 @@ export function getActiveWorkspace(): RuntimeWorkspace | undefined {
   return state.workspaces.find(w => w.id === state.activeWorkspaceId);
 }
 
+/** 패널의 실질적인 작업 디렉토리 — 패널 자체 cwd가 없으면 워크스페이스 cwd로 폴백 */
+export function resolvePanelCwd(panel: PanelState): string {
+  return panel.cwd || getActiveWorkspace()?.cwd || '';
+}
+
 // ── 패널 분할/닫기 ──
 
 export function splitPanel(

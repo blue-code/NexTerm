@@ -5,6 +5,7 @@ import { state } from './state';
 import { escapeHtml } from './utils';
 import {
   getActiveWorkspace,
+  resolvePanelCwd,
   selectWorkspace,
   closeWorkspace,
   splitPanel,
@@ -20,7 +21,8 @@ import { createOmnibar } from './omnibar';
 import { createMarkdownViewer } from './markdown-viewer';
 import { attachPanelContextMenu } from './panel-context-menu';
 import { refreshPendingHint } from './pending-input';
-import { toggleQuickCommands } from './quick-commands';
+import { toggleQuickCommands, runNamedCommandInPanel, openQuickLaunchDropdown } from './quick-commands';
+import { getNamedCommands } from './named-commands';
 import { openPanelLauncher } from './panel-launcher';
 import type { PanelState } from '../shared/types';
 import type { RuntimeWorkspace } from './state';
@@ -247,11 +249,14 @@ function renderPanel(panel: PanelState): HTMLElement {
   // Vim 모드 배지: 터미널 제목에 vim/nvim이 포함되면 표시
   const isVimActive = panel.type === 'terminal' && panel.title && /\b(n?vim)\b/i.test(panel.title);
 
+  const panelCwd = resolvePanelCwd(panel);
+  // 이 디렉토리에 등록된 빠른 명령 — 가장 최근에 실행(없으면 등록)한 것이 대표(▶)로 뜬다
+  const quickCommands = panel.type === 'terminal' ? getNamedCommands(panelCwd) : [];
+
   const panelLabel = (() => {
     if (panel.type === 'terminal') {
-      const cwd = panel.cwd || getActiveWorkspace()?.cwd || '';
-      if (cwd) {
-        const folderName = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+      if (panelCwd) {
+        const folderName = panelCwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
         return folderName ? `${typeLabels[panel.type]}: ${folderName}` : typeLabels[panel.type];
       }
     }
@@ -265,13 +270,30 @@ function renderPanel(panel: PanelState): HTMLElement {
       ${isVimActive ? '<span class="vim-badge">VIM</span>' : ''}
     </div>
     <div class="panel-actions">
-      ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="quick-cmd" title="빠른 명령">⚡</button>' : ''}
+      ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="quick-cmd" title="빠른 명령 관리">»</button>' : ''}
+      ${quickCommands.length > 0 ? `
+        <span class="qcmd-splitbtn" title="${escapeHtml(quickCommands[0].name)}: ${escapeHtml(quickCommands[0].command)}">
+          <button class="qcmd-splitbtn-run" data-id="${escapeHtml(quickCommands[0].id)}">▶ ${escapeHtml(quickCommands[0].name)}</button>
+          <button class="qcmd-splitbtn-chevron" title="등록된 명령 목록">⌄</button>
+        </span>
+      ` : ''}
       ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="search" title="검색 (Ctrl+F)">⌕</button>' : ''}
       <button class="panel-btn" data-action="split-h" title="수평 분할 (Ctrl+D)">⇥</button>
       <button class="panel-btn" data-action="split-v" title="수직 분할 (Ctrl+Shift+D)">⤓</button>
       <button class="panel-btn" data-action="close" title="닫기 (Ctrl+W)">✕</button>
     </div>
   `;
+
+  header.querySelector('.qcmd-splitbtn-run')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = (e.currentTarget as HTMLElement).dataset.id;
+    const entry = quickCommands.find((c) => c.id === id);
+    if (entry) runNamedCommandInPanel(panel.id, entry);
+  });
+  header.querySelector('.qcmd-splitbtn-chevron')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openQuickLaunchDropdown(e.currentTarget as HTMLElement, panel.id, panelCwd);
+  });
 
   header.querySelectorAll('.panel-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -283,7 +305,7 @@ function renderPanel(panel: PanelState): HTMLElement {
       else if (action === 'search') toggleTerminalSearch(panel.id);
       else if (action === 'quick-cmd') {
         state.focusedPanelId = panel.id;
-        toggleQuickCommands(btn as HTMLElement);
+        toggleQuickCommands(btn as HTMLElement, panelCwd);
       }
     });
   });

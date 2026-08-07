@@ -89,9 +89,10 @@ export interface AppSettings {
   defaultShell: string; // 기본 셸 (powershell.exe, cmd.exe 등)
   externalUrlPatterns: string[]; // 외부 브라우저로 열 URL 패턴 (glob 형태)
   language: string; // UI 언어 (ko, en, ja, zh)
-  // 하단 상태바 AI 사용량 자동 감지 표시 여부 — 터미널에서 실제 실행 중으로 감지된
-  // 도구(Claude Code/Codex/Antigravity)의 사용량만 표시한다
-  usageAutoDetectEnabled: boolean;
+  // 하단 상태바에 표시할 AI 도구 사용량 제공자 목록 (체크한 항목만 조회/표시).
+  // 터미널 감지 여부와 무관하게 항상 표시한다 — 도구가 사용량 한도로 막혀 프롬프트를
+  // 못 띄우는 경우에도(예: Codex 한도 초과) 놓치지 않기 위함.
+  usageVisibleProviders: UsageProviderId[];
   // 사용량 자동 새로고침 주기 (초). 제공자별 최소 간격은 main에서 별도 보호.
   usageRefreshIntervalSec: number;
 }

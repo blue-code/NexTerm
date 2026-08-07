@@ -9,6 +9,7 @@ import {
   parseClaudeUsage,
   parseCodexSessionJsonl,
   parseAntigravityQuota,
+  parseCodexLimitResetDate,
 } from '../src/main/services/usage-service';
 import { formatRemaining, formatPercent } from '../src/shared/usage-format';
 
@@ -101,6 +102,58 @@ describe('parseCodexSessionJsonl', () => {
       '깨진 JSON 라인',
     ].join('\n');
     expect(parseCodexSessionJsonl(content, NOW)).toBeNull();
+  });
+
+  it('usage_limit_exceeded 에러는 rate_limits(primary/secondary=null)보다 우선해 100%로 표시한다', () => {
+    // 실제 관측된 형태: 한도 초과 시 rate_limits는 남지만 primary/secondary가 둘 다 null이라
+    // 그대로 두면 이 값이 무시되고 더 오래된 파일의 stale 수치로 폴백해버린다.
+    const content = [
+      line('2026-08-07T01:00:00Z', {
+        primary: { used_percent: 11, window_minutes: 10080, resets_at: 1785261615 },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-07T01:09:19.518Z',
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: null,
+          rate_limits: { primary: null, secondary: null },
+        },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-07T01:09:19.542Z',
+        type: 'event_msg',
+        payload: {
+          type: 'task_complete',
+          error: {
+            message: "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 8th, 2026 11:07 PM.",
+            codex_error_info: 'usage_limit_exceeded',
+          },
+        },
+      }),
+    ].join('\n');
+
+    const snap = parseCodexSessionJsonl(content, NOW);
+    expect(snap).not.toBeNull();
+    expect(snap!.windows).toEqual([{
+      label: '사용량 한도 초과',
+      usedPercent: 100,
+      resetsAt: Date.parse('2026-08-08T23:07:00'),
+    }]);
+    expect(snap!.updatedAt).toBe(Date.parse('2026-08-07T01:09:19.542Z'));
+  });
+});
+
+describe('parseCodexLimitResetDate', () => {
+  it('"try again at ... ." 꼬리에서 서수 접미사를 제거하고 날짜를 파싱한다', () => {
+    const ms = parseCodexLimitResetDate(
+      "You've hit your usage limit. Upgrade to Pro, try again at Aug 8th, 2026 11:07 PM.",
+    );
+    expect(ms).toBe(Date.parse('2026-08-08T23:07:00'));
+  });
+
+  it('꼬리 패턴이 없으면 null', () => {
+    expect(parseCodexLimitResetDate('알 수 없는 오류입니다.')).toBeNull();
   });
 });
 

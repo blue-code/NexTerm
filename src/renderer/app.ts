@@ -209,16 +209,21 @@ async function initSettings(): Promise<void> {
     });
   }
 
-  // 사용량 자동 감지 표시 여부 (하단 상태바) — 터미널에서 감지된 도구만 표시
-  const usageAutoDetectInput = document.getElementById('setting-usage-auto-detect') as HTMLInputElement | null;
-  if (usageAutoDetectInput) {
-    usageAutoDetectInput.checked = state.settings?.usageAutoDetectEnabled ?? true;
-    usageAutoDetectInput.addEventListener('change', () => {
-      const enabled = usageAutoDetectInput.checked;
-      if (!state.settings) state.settings = {} as AppSettings;
-      state.settings.usageAutoDetectEnabled = enabled;
-      electronAPI.invoke('settings:set', { usageAutoDetectEnabled: enabled });
-      applyUsageVisibility();
+  // 사용량 표시 항목 선택 (하단 상태바) — 체크한 제공자만 조회/표시
+  const usageProviderCheckboxes = document.querySelectorAll<HTMLInputElement>('.usage-provider-checkbox');
+  if (usageProviderCheckboxes.length > 0) {
+    const visible = new Set(state.settings?.usageVisibleProviders ?? ['claude']);
+    usageProviderCheckboxes.forEach((cb) => {
+      cb.checked = visible.has(cb.value as AppSettings['usageVisibleProviders'][number]);
+      cb.addEventListener('change', () => {
+        const selected = Array.from(usageProviderCheckboxes)
+          .filter((c) => c.checked)
+          .map((c) => c.value) as AppSettings['usageVisibleProviders'];
+        if (!state.settings) state.settings = {} as AppSettings;
+        state.settings.usageVisibleProviders = selected;
+        electronAPI.invoke('settings:set', { usageVisibleProviders: selected });
+        applyUsageVisibility();
+      });
     });
   }
 

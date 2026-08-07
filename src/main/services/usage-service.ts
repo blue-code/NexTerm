@@ -99,23 +99,57 @@ function codexWindow(raw: CodexRateWindowRaw | undefined, eventMs: number, fallb
 }
 
 /**
- * 세션 rollout JSONL 내용에서 가장 마지막 rate_limits를 찾아 스냅샷 생성.
- * rate_limits가 전혀 없으면 null (호출자가 다음 파일을 계속 탐색).
+ * task_complete 에러 메시지의 "try again at Aug 8th, 2026 11:07 PM." 꼬리에서 리셋 시각을 추출.
+ * 서수 접미사(1st/2nd/3rd/4th 등)는 Date.parse가 못 읽으므로 제거 후 파싱한다.
+ * 파싱 실패 시 null (호출자는 리셋 시각 없이 표시).
+ */
+export function parseCodexLimitResetDate(message: string): number | null {
+  const m = message.match(/try again at ([^.]+)\.?\s*$/i);
+  if (!m) return null;
+  const cleaned = m[1].replace(/(\d+)(st|nd|rd|th)\b/i, '$1');
+  const t = Date.parse(cleaned);
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * 세션 rollout JSONL 내용에서 가장 마지막(최신) 사용량 신호를 찾아 스냅샷 생성.
+ * 두 가지 신호를 함께 본다 (뒤에서부터 스캔하며 먼저 만나는 쪽이 최신 상태이므로 그것을 채택):
+ *  - "usage_limit_exceeded" 에러: 계정이 한도 초과로 완전히 막힌 상태. rate_limits의
+ *    남은 퍼센트보다 우선한다 — 이 이벤트가 있는 파일은 대개 rate_limits.primary/secondary가
+ *    둘 다 null이라(요청 자체가 거부됨) 방치하면 더 오래된 파일의 stale 수치로 폴백해버린다.
+ *  - rate_limits: 평소의 세션(5h)/주간 사용률.
+ * 둘 다 없으면 null (호출자가 다음 파일을 계속 탐색).
  */
 export function parseCodexSessionJsonl(content: string, now: number): UsageSnapshot | null {
   const lines = content.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].includes('rate_limits')) continue;
+    const line = lines[i];
+    if (!line.includes('rate_limits') && !line.includes('usage_limit_exceeded')) continue;
     try {
-      const record = JSON.parse(lines[i]) as {
+      const record = JSON.parse(line) as {
         timestamp?: unknown;
-        payload?: { rate_limits?: { primary?: CodexRateWindowRaw; secondary?: CodexRateWindowRaw } | null };
+        payload?: {
+          rate_limits?: { primary?: CodexRateWindowRaw; secondary?: CodexRateWindowRaw } | null;
+          error?: { message?: unknown; codex_error_info?: unknown } | null;
+        };
         rate_limits?: { primary?: CodexRateWindowRaw; secondary?: CodexRateWindowRaw } | null;
       };
+      const eventMs = toEpochMs(record.timestamp) ?? now;
+
+      const err = record.payload?.error;
+      if (err && err.codex_error_info === 'usage_limit_exceeded') {
+        const resetsAt = typeof err.message === 'string' ? parseCodexLimitResetDate(err.message) : null;
+        return {
+          provider: 'codex',
+          ok: true,
+          windows: [{ label: '사용량 한도 초과', usedPercent: 100, resetsAt }],
+          updatedAt: eventMs,
+          stale: true,
+        };
+      }
+
       const rl = record.payload?.rate_limits ?? record.rate_limits;
       if (!rl) continue;
-
-      const eventMs = toEpochMs(record.timestamp) ?? now;
       const windows: UsageWindow[] = [];
       const primary = codexWindow(rl.primary, eventMs, '세션(5h)');
       const secondary = codexWindow(rl.secondary, eventMs, '주간');

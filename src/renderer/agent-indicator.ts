@@ -3,7 +3,6 @@
  * 패널 헤더와 사이드바에 에이전트 활성/완료 상태를 표시한다.
  */
 import { state, electronAPI, triggerSidebarRender } from './state';
-import { notifyAgentActivityChanged } from './usage-status';
 import type { AgentStatusChangePayload } from '../shared/agent-types';
 
 /** 에이전트 상태 변경 IPC 리스너 등록 */
@@ -28,8 +27,6 @@ export function initAgentListeners(): void {
     updatePanelBadge(panelId);
     // 사이드바에 에이전트 상태 반영
     triggerSidebarRender();
-    // 하단 상태바 사용량 표시를 감지 상태에 맞춰 즉시 갱신
-    notifyAgentActivityChanged();
   });
 }
 

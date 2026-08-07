@@ -1016,6 +1016,27 @@ body.presentation-mode #app {
   cursor: pointer;
 }
 
+.setting-group-column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.setting-group-column > label:first-child {
+  margin-bottom: 8px;
+}
+
+.setting-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-checkbox-group .setting-checkbox-label {
+  width: auto;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
 /* 폰트 프리뷰 */
 .font-preview-text {
   width: 100%;
@@ -1666,6 +1687,12 @@ body.presentation-mode #workspace-content {
   font-weight: 600;
 }
 
+.qcmd-header-cwd {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 .qcmd-header-actions {
   display: flex;
   gap: 4px;
@@ -1729,7 +1756,7 @@ body.presentation-mode #workspace-content {
 .qcmd-item-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1809,6 +1836,71 @@ body.presentation-mode #workspace-content {
 
 .qcmd-history-item {
   font-family: var(--font-mono);
+}
+
+/* ── 패널 헤더의 빠른 명령 실행 버튼(▶ 이름 | ⌄) ── */
+
+.qcmd-splitbtn {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.qcmd-splitbtn-run,
+.qcmd-splitbtn-chevron {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.qcmd-splitbtn-run {
+  padding: 0 6px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qcmd-splitbtn-chevron {
+  padding: 0 4px;
+  border-left: 1px solid var(--border);
+}
+
+.qcmd-splitbtn-run:hover,
+.qcmd-splitbtn-chevron:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 헤더 실행 버튼에서 여는 명령 목록 드롭다운 / 인라인 편집 팝오버 */
+#quick-launch-dropdown,
+#quick-command-editor-popup {
+  position: fixed;
+  z-index: 2600;
+  width: 300px;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  padding: 4px 0;
+}
+
+#quick-command-editor-popup {
+  padding: 8px 0;
 }
 
 /* ── 다음 명령 제안(pending input) 힌트 배너 ── */
