@@ -12,7 +12,7 @@ import {
   applyFontSizeToAllTerminals,
   initTerminalIpcListeners,
 } from './terminal';
-import { createWorkspace, initChildDetectListener } from './workspace';
+import { createWorkspace, initChildDetectListener, initOpenPathListener } from './workspace';
 import { renderSidebar, renderWorkspaceContent } from './render';
 import { initCommandPaletteEvents, setToggleSidebar } from './command-palette';
 import { initKeyboardShortcuts, setToggleSidebarHandler } from './keyboard';
@@ -314,6 +314,7 @@ async function init(): Promise<void> {
   initTerminalIpcListeners();
   initSessionListeners();
   initChildDetectListener();
+  initOpenPathListener();
   initAgentListeners();
 
   await initSettings();

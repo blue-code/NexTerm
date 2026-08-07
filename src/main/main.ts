@@ -50,6 +50,24 @@ if (!gotLock) {
   app.quit();
 }
 
+/**
+ * 탐색기 "NexTerm으로 열기" 등으로 폴더 경로를 인자로 실행됐을 때 그 경로를 추출한다.
+ * 패키지 앱: argv[0]=exe, 개발 모드(electron .): argv[0]=electron, argv[1]=앱 경로.
+ * 플래그(-로 시작)는 건너뛰고, 실존하는 디렉토리인 마지막 인자를 사용한다.
+ */
+function extractFolderArg(argv: string[]): string | null {
+  const args = app.isPackaged ? argv.slice(1) : argv.slice(2);
+  for (const arg of args) {
+    if (!arg || arg.startsWith('-')) continue;
+    try {
+      if (fs.existsSync(arg) && fs.statSync(arg).isDirectory()) return arg;
+    } catch {
+      // 다음 인자 확인
+    }
+  }
+  return null;
+}
+
 // 로거 초기화
 initFileLogging();
 if (process.argv.includes('--dev')) {
@@ -124,7 +142,7 @@ const AGENT_RESUME_COMMANDS: Record<string, string> = {
   'Gemini': 'gemini',
 };
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   // 세션에서 창 크기 복원 시도
   const session = sessionService.load();
   const bounds = session?.windowBounds ?? {
@@ -134,7 +152,7 @@ function createWindow(): void {
     height: 900,
   };
 
-  windowManager.create({
+  const { window } = windowManager.create({
     appRoot,
     preloadPath: path.join(__dirname, 'preload.js'),
     isDev: process.argv.includes('--dev'),
@@ -151,6 +169,18 @@ function createWindow(): void {
         win.webContents.send('session:request-snapshot');
       }
     }, 8000);
+  }
+
+  return window;
+}
+
+/** 렌더러가 준비된 뒤 지정 경로로 새 워크스페이스를 열도록 요청한다 */
+function openPathInWindow(win: BrowserWindow, folderPath: string): void {
+  const send = (): void => win.webContents.send(IPC_CHANNELS.WORKSPACE_OPEN_PATH, { path: folderPath });
+  if (win.webContents.isLoadingMainFrame()) {
+    win.webContents.once('did-finish-load', send);
+  } else {
+    send();
   }
 }
 
@@ -171,7 +201,7 @@ function setupIpcHandlers(): void {
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
   // 터미널 생성
-  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string; resumeAgent?: string | null }) => {
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_CREATE, (_event, opts: { id: string; cwd?: string; shell?: string; shellCommand?: string; resumeAgent?: string | null; initialCommand?: string }) => {
     const shellPath = opts.shell || process.env.COMSPEC || 'cmd.exe';
     // cwd가 유효하지 않으면 홈 디렉토리로 폴백 (에러 코드 267 방지)
     const requestedCwd = opts.cwd || process.env.USERPROFILE || 'C:\\';
@@ -191,31 +221,32 @@ function setupIpcHandlers(): void {
       }
     }
 
-    // AI 에이전트 자동 재개: 셸 출력이 잠잠해지면 resume 명령을 한 번 자동 입력
-    // shellCommand 주입과 충돌하지 않도록 둘 다 있을 때는 shellCommand 우선
-    const resumeCommand = (
-      currentSettings.autoResumeAgents
-      && opts.resumeAgent
-      && !opts.shellCommand
-    ) ? AGENT_RESUME_COMMANDS[opts.resumeAgent] : null;
+    // 셸 출력이 잠잠해지면 자동 입력 명령을 한 번 전송한다. 우선순위:
+    // 1) initialCommand — 새 패널 런처에서 AI를 골랐을 때의 1회성 실행 명령
+    // 2) resumeAgent — 세션 복원 시 이전 AI 에이전트 재개 명령
+    // shellCommand 주입과는 충돌 방지를 위해 함께 오면 shellCommand를 우선한다
+    const autoTypeCommand = opts.shellCommand ? null : (
+      opts.initialCommand
+      || (currentSettings.autoResumeAgents && opts.resumeAgent ? AGENT_RESUME_COMMANDS[opts.resumeAgent] : null)
+    );
     let resumeIdleTimer: ReturnType<typeof setTimeout> | null = null;
     let resumeDone = false;
     const RESUME_IDLE_MS = 600;       // 출력 잠잠 → 프롬프트 안정으로 간주
     const RESUME_DEADLINE_MS = 5000;  // 출력이 끝없이 흐르면 강제로 한 번 시도
 
     const fireResume = (): void => {
-      if (resumeDone || !resumeCommand) return;
+      if (resumeDone || !autoTypeCommand) return;
       resumeDone = true;
       if (resumeIdleTimer) { clearTimeout(resumeIdleTimer); resumeIdleTimer = null; }
       try {
-        terminalService.write(opts.id, resumeCommand + '\r');
-        log.info('AI 에이전트 자동 재개', { panelId: opts.id, agent: opts.resumeAgent, command: resumeCommand });
+        terminalService.write(opts.id, autoTypeCommand + '\r');
+        log.info('셸 자동 입력', { panelId: opts.id, command: autoTypeCommand });
       } catch (err) {
-        log.warn('자동 재개 명령 전송 실패', err);
+        log.warn('자동 입력 명령 전송 실패', err);
       }
     };
 
-    if (resumeCommand) {
+    if (autoTypeCommand) {
       // 데드라인 보호: 출력이 계속 흐르더라도 일정 시간 후엔 강제 발화
       setTimeout(fireResume, RESUME_DEADLINE_MS);
     }
@@ -226,7 +257,7 @@ function setupIpcHandlers(): void {
       agentDetectService.feed(opts.id, data);
 
       // 자동 재개 대상 패널: 출력이 도착할 때마다 idle 타이머 리셋
-      if (resumeCommand && !resumeDone) {
+      if (autoTypeCommand && !resumeDone) {
         if (resumeIdleTimer) clearTimeout(resumeIdleTimer);
         resumeIdleTimer = setTimeout(fireResume, RESUME_IDLE_MS);
       }
@@ -532,9 +563,15 @@ app.whenReady().then(() => {
     windowManager.broadcast('terminal:child-detected', { commandLine });
   });
 
-  createWindow();
+  const win = createWindow();
   setupIpcHandlers();
   setupPipeServer();
+
+  // 탐색기 "NexTerm으로 열기"로 폴더 경로를 인자로 첫 실행된 경우
+  const initialFolder = extractFolderArg(process.argv);
+  if (initialFolder) {
+    openPathInWindow(win, initialFolder);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -543,11 +580,15 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, commandLine) => {
   const win = windowManager.getFocusedWindow();
   if (win) {
     if (win.isMinimized()) win.restore();
     win.focus();
+
+    // 탐색기 "NexTerm으로 열기"로 폴더 경로를 인자로 재실행된 경우, 기존 창에 새 워크스페이스로 연다
+    const folder = extractFolderArg(commandLine);
+    if (folder) openPathInWindow(win, folder);
   }
 });
 

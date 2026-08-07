@@ -26,6 +26,9 @@ export interface PanelState {
   scrollback?: string;
   shell?: string;
   shellCommand?: string;
+  // 새 패널 런처(셸/AI 선택)에서 AI를 고른 경우, 셸이 준비되면 자동 입력할 명령
+  // (예: 'claude --dangerously-skip-permissions'). 세션에는 저장하지 않는다(1회성).
+  initialCommand?: string;
   // 세션 복원 시 자동 재개할 AI 에이전트 이름 (예: 'Claude Code', 'Codex')
   // 종료 패턴이 매칭된 패널은 null로 비워져 다음 저장에서 자동 해제된다.
   resumeAgent?: string | null;
@@ -144,6 +147,8 @@ export const IPC_CHANNELS = {
   WORKSPACE_RENAME: 'workspace:rename',
   WORKSPACE_LIST: 'workspace:list',
   WORKSPACE_SELECT: 'workspace:select',
+  // 탐색기 "NexTerm으로 열기" 등 외부에서 폴더 경로로 실행/재실행됐을 때
+  WORKSPACE_OPEN_PATH: 'workspace:open-path',
 
   // 패널
   PANEL_SPLIT: 'panel:split',

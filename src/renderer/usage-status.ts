@@ -6,7 +6,9 @@
  * 조회해 표시한다. 감지된 도구가 없으면 사용량 영역 자체를 숨긴다.
  * 패널의 에이전트 상태가 바뀔 때마다 agent-indicator.ts가 notifyAgentActivityChanged()를
  * 호출해 즉시 반영하고, 폴링 주기로도 최신 사용률을 갱신한다.
- * ↻ 버튼으로 즉시 새로고침(force) 가능 — main 쪽에서 제공자별 최소 간격으로 보호된다.
+ * ↻ 버튼은 감지 여부와 무관하게 항상 노출된다 — 클릭(수동 새로고침)하면 감지된 게
+ * 없어도 지원 제공자 전체를 확인해 "실행 전 남은 쿼터"를 볼 수 있다. main 쪽에서
+ * 제공자별 최소 간격으로 과호출을 보호한다.
  *
  * 상태바 자체는 항상 표시한다 (복사/붙여넣기 단축키 안내를 상시 노출해야 하므로).
  */
@@ -29,6 +31,9 @@ const AGENT_NAME_TO_PROVIDER: Record<string, UsageProviderId> = {
   'Codex': 'codex',
   'Antigravity': 'antigravity',
 };
+
+// 수동 새로고침(force) 시, 감지된 게 없어도 확인할 지원 제공자 전체 목록
+const ALL_PROVIDERS: UsageProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const DEFAULT_INTERVAL_SEC = 300;
 const MIN_INTERVAL_SEC = 30;
@@ -75,9 +80,11 @@ export function applyUsageVisibility(): void {
   bar?.classList.remove('hidden');
 
   stopPolling();
-  if (!autoDetectEnabled()) {
+  const enabled = autoDetectEnabled();
+  // 새로고침 버튼은 감지 여부와 무관하게 항상 노출 — "실행 전 남은 쿼터 확인" 용도
+  document.getElementById('btn-usage-refresh')?.classList.toggle('hidden', !enabled);
+  if (!enabled) {
     document.getElementById('usage-status')?.classList.add('hidden');
-    document.getElementById('btn-usage-refresh')?.classList.add('hidden');
     fitAllTerminals();
     return;
   }
@@ -100,7 +107,6 @@ export function notifyAgentActivityChanged(): void {
 function syncVisibility(): void {
   const hasAny = detectedProviders().length > 0;
   document.getElementById('usage-status')?.classList.toggle('hidden', !hasAny);
-  document.getElementById('btn-usage-refresh')?.classList.toggle('hidden', !hasAny);
   fitAllTerminals();
 
   if (hasAny) {
@@ -131,7 +137,10 @@ function stopPolling(): void {
 
 async function refreshUsage(force: boolean): Promise<void> {
   if (!autoDetectEnabled() || refreshing) return;
-  const providers = detectedProviders();
+  const detected = detectedProviders();
+  // 수동 새로고침(force)인데 지금 감지된 게 없으면, "실행 전 남은 쿼터 확인"을 위해
+  // 지원하는 제공자를 전부 한 번 확인한다. 자동 폴링(force=false)은 감지된 것만 본다.
+  const providers = (force && detected.length === 0) ? ALL_PROVIDERS : detected;
   if (providers.length === 0) {
     lastSnapshots = [];
     renderSnapshots([]);
@@ -149,6 +158,8 @@ async function refreshUsage(force: boolean): Promise<void> {
     );
     lastSnapshots = snapshots;
     renderSnapshots(snapshots);
+    // 감지 없이 수동으로 확인한 결과라면 영역을 펼쳐서 보여준다
+    document.getElementById('usage-status')?.classList.toggle('hidden', snapshots.length === 0);
   } catch {
     renderText('사용량 조회 실패');
   } finally {
@@ -175,7 +186,9 @@ function renderGroup(snap: UsageSnapshot, now: number): string {
 
   const parts = snap.windows.map((w) => {
     const pct = formatPercent(w.usedPercent);
-    const reset = w.resetsAt !== null ? ` (${formatRemaining(w.resetsAt - now)} 후 리셋)` : '';
+    // resetsAt이 이미 지난 값이면(Codex처럼 오래된 세션 기록 기반 stale 데이터) "곧 리셋"으로
+    // 잘못 표시하지 않고 생략한다 — 실제 리셋 여부를 알 수 없는 상태이기 때문
+    const reset = (w.resetsAt !== null && w.resetsAt > now) ? ` (${formatRemaining(w.resetsAt - now)} 후 리셋)` : '';
     const warn = (w.usedPercent ?? 0) >= 80 ? ' usage-warn' : '';
     return `<span class="usage-window${warn}">${escapeHtml(w.label)} <b>${escapeHtml(pct)}</b>${escapeHtml(reset)}</span>`;
   });

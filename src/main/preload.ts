@@ -49,6 +49,7 @@ const ALLOWED_ON = new Set([
   'settings:changed',
   'agent:status-changed',
   'file:changed',
+  'workspace:open-path',
 ]);
 
 // ── contextBridge로 안전한 API만 노출 ──

@@ -20,6 +20,8 @@ import { createOmnibar } from './omnibar';
 import { createMarkdownViewer } from './markdown-viewer';
 import { attachPanelContextMenu } from './panel-context-menu';
 import { refreshPendingHint } from './pending-input';
+import { toggleQuickCommands } from './quick-commands';
+import { openPanelLauncher } from './panel-launcher';
 import type { PanelState } from '../shared/types';
 import type { RuntimeWorkspace } from './state';
 
@@ -128,7 +130,9 @@ export function renderWorkspaceContent(): void {
       // 패널 재렌더 후 pending input 힌트 복원 (워크스페이스 전환·줌 토글 등)
       refreshPendingHint(panel.id);
       if (panel.type === 'terminal') {
-        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback, panel.resumeAgent);
+        const inst = createTerminalInstance(panel.id, panel.cwd, panel.shell, panel.shellCommand, panel.scrollback, panel.resumeAgent, panel.initialCommand);
+        // 1회성 자동 입력 명령이므로 세션에 다시 저장되어 재실행되지 않도록 즉시 비움
+        panel.initialCommand = undefined;
         const mount = container.querySelector(`.term-mount[data-panel-id="${panel.id}"]`);
         if (mount && inst.container) {
           // 마운트 전 스크롤 상태 저장
@@ -261,6 +265,7 @@ function renderPanel(panel: PanelState): HTMLElement {
       ${isVimActive ? '<span class="vim-badge">VIM</span>' : ''}
     </div>
     <div class="panel-actions">
+      ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="quick-cmd" title="빠른 명령">⚡</button>' : ''}
       ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="search" title="검색 (Ctrl+F)">⌕</button>' : ''}
       <button class="panel-btn" data-action="split-h" title="수평 분할 (Ctrl+D)">⇥</button>
       <button class="panel-btn" data-action="split-v" title="수직 분할 (Ctrl+Shift+D)">⤓</button>
@@ -273,13 +278,13 @@ function renderPanel(panel: PanelState): HTMLElement {
       e.stopPropagation();
       const action = (btn as HTMLElement).dataset.action;
       if (action === 'close') closePanel(panel.id);
-      else if (action === 'split-h') {
+      else if (action === 'split-h') openPanelLauncher('horizontal', panel.id, btn as HTMLElement);
+      else if (action === 'split-v') openPanelLauncher('vertical', panel.id, btn as HTMLElement);
+      else if (action === 'search') toggleTerminalSearch(panel.id);
+      else if (action === 'quick-cmd') {
         state.focusedPanelId = panel.id;
-        splitPanel('horizontal');
-      } else if (action === 'split-v') {
-        state.focusedPanelId = panel.id;
-        splitPanel('vertical');
-      } else if (action === 'search') toggleTerminalSearch(panel.id);
+        toggleQuickCommands(btn as HTMLElement);
+      }
     });
   });
 

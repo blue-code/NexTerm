@@ -84,7 +84,7 @@ export function getActiveWorkspace(): RuntimeWorkspace | undefined {
 
 export function splitPanel(
   direction: 'horizontal' | 'vertical',
-  opts: { cwd?: string; shell?: string } = {},
+  opts: { cwd?: string; shell?: string; initialCommand?: string } = {},
 ): void {
   const ws = getActiveWorkspace();
   if (!ws) return;
@@ -100,6 +100,7 @@ export function splitPanel(
     title: '터미널',
     cwd: opts.cwd || targetPanel?.cwd || ws.cwd,
     shell: opts.shell || undefined,
+    initialCommand: opts.initialCommand || undefined,
   };
   ws.panels.push(newPanel);
 
@@ -276,4 +277,16 @@ export function initChildDetectListener(): void {
 export function cleanupChildDetectListener(): void {
   removeChildDetected?.();
   removeChildDetected = null;
+}
+
+// ── 탐색기 "NexTerm으로 열기" IPC ──
+
+/** 탐색기 우클릭 메뉴 등 외부에서 폴더 경로로 실행/재실행됐을 때 새 워크스페이스로 연다 */
+export function initOpenPathListener(): void {
+  electronAPI.on('workspace:open-path', (payload: unknown) => {
+    const { path: folderPath } = payload as { path: string };
+    if (!folderPath) return;
+    const name = folderPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || folderPath;
+    createWorkspace(name, folderPath);
+  });
 }

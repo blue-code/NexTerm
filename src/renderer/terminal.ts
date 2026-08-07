@@ -33,6 +33,7 @@ export function createTerminalInstance(
   shellCommand?: string,
   scrollback?: string,
   resumeAgent?: string | null,
+  initialCommand?: string,
 ): TerminalInst {
   if (state.terminalInstances.has(panelId)) {
     return state.terminalInstances.get(panelId)!;
@@ -170,6 +171,7 @@ export function createTerminalInstance(
     shell: shell || state.defaultShell,
     shellCommand: shellCommand || '',
     resumeAgent: resumeAgent || null,
+    initialCommand: initialCommand || '',
   });
 
   terminal.onData((data: string) => {
