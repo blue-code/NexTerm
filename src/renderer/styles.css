@@ -1656,7 +1656,7 @@ body.presentation-mode #workspace-content {
 #quick-commands-popup {
   position: fixed;
   z-index: 2500;
-  width: 380px;
+  width: 460px;
   max-height: 70vh;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -1795,7 +1795,8 @@ body.presentation-mode #workspace-content {
   background: var(--bg-tertiary);
 }
 
-.qcmd-form input {
+.qcmd-form input,
+.qcmd-form textarea {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1803,14 +1804,20 @@ body.presentation-mode #workspace-content {
   color: var(--text-primary);
   font-size: 12px;
   outline: none;
+  font-family: inherit;
 }
 
-.qcmd-form input:focus {
+.qcmd-form input:focus,
+.qcmd-form textarea:focus {
   border-color: var(--accent);
 }
 
 .qcmd-form-cmd {
   font-family: var(--font-mono);
+  resize: vertical;
+  min-height: 44px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .qcmd-form-actions {
@@ -1887,7 +1894,7 @@ body.presentation-mode #workspace-content {
 #quick-command-editor-popup {
   position: fixed;
   z-index: 2600;
-  width: 300px;
+  width: 360px;
   max-height: 50vh;
   overflow-y: auto;
   background: var(--bg-secondary);

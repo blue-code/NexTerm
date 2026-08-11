@@ -175,7 +175,7 @@ function renderForm(entry: NamedCommand | null): string {
   return `
     <div class="qcmd-form" data-id="${entry ? escapeHtml(entry.id) : ''}">
       <input class="qcmd-form-name" placeholder="이름 (예: run)" value="${entry ? escapeHtml(entry.name) : ''}">
-      <input class="qcmd-form-cmd" placeholder="명령어" value="${entry ? escapeHtml(entry.command) : ''}">
+      <textarea class="qcmd-form-cmd" placeholder="명령어" rows="3" spellcheck="false">${entry ? escapeHtml(entry.command) : ''}</textarea>
       <div class="qcmd-form-actions">
         <button class="icon-btn" data-act="save" title="저장">✓</button>
         <button class="icon-btn" data-act="cancel" title="취소">✕</button>
@@ -253,7 +253,7 @@ function bindListEvents(): void {
   listEl.querySelectorAll<HTMLElement>('.qcmd-form').forEach((form) => {
     const id = form.dataset.id || null;
     const nameInput = form.querySelector('.qcmd-form-name') as HTMLInputElement;
-    const cmdInput = form.querySelector('.qcmd-form-cmd') as HTMLInputElement;
+    const cmdInput = form.querySelector('.qcmd-form-cmd') as HTMLTextAreaElement;
     nameInput?.focus();
 
     const commit = (): void => {
@@ -273,10 +273,10 @@ function bindListEvents(): void {
     form.querySelector('[data-act="save"]')?.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
     form.querySelector('[data-act="cancel"]')?.addEventListener('click', (e) => { e.stopPropagation(); cancel(); });
     [nameInput, cmdInput].forEach((input) => {
-      input?.addEventListener('keydown', (e) => {
+      input?.addEventListener('keydown', ((e: KeyboardEvent) => {
         if (e.key === 'Enter') { e.preventDefault(); commit(); }
         else if (e.key === 'Escape') { e.stopPropagation(); cancel(); }
-      });
+      }) as EventListener);
     });
   });
 
@@ -446,7 +446,7 @@ export function openCommandEditor(anchor: HTMLElement, entry: NamedCommand): voi
   el.innerHTML = `
     <div class="qcmd-form">
       <input class="qcmd-form-name" placeholder="이름" value="${escapeHtml(entry.name)}">
-      <input class="qcmd-form-cmd" placeholder="명령어" value="${escapeHtml(entry.command)}">
+      <textarea class="qcmd-form-cmd" placeholder="명령어" rows="3" spellcheck="false">${escapeHtml(entry.command)}</textarea>
       <div class="qcmd-form-actions">
         <button class="icon-btn" data-act="delete" title="삭제">🗑</button>
         <button class="icon-btn" data-act="save" title="저장">✓</button>
@@ -458,12 +458,12 @@ export function openCommandEditor(anchor: HTMLElement, entry: NamedCommand): voi
   editorPopup = el;
 
   const rect = anchor.getBoundingClientRect();
-  const left = Math.min(window.innerWidth - 260, rect.left);
+  const left = Math.min(window.innerWidth - 320, rect.left);
   el.style.left = `${Math.max(8, left)}px`;
-  el.style.top = `${Math.min(window.innerHeight - 120, rect.bottom + 6)}px`;
+  el.style.top = `${Math.min(window.innerHeight - 160, rect.bottom + 6)}px`;
 
   const nameInput = el.querySelector('.qcmd-form-name') as HTMLInputElement;
-  const cmdInput = el.querySelector('.qcmd-form-cmd') as HTMLInputElement;
+  const cmdInput = el.querySelector('.qcmd-form-cmd') as HTMLTextAreaElement;
   nameInput.focus();
   nameInput.select();
 
@@ -481,10 +481,10 @@ export function openCommandEditor(anchor: HTMLElement, entry: NamedCommand): voi
     triggerContentRender();
   });
   [nameInput, cmdInput].forEach((input) => {
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', ((e: KeyboardEvent) => {
       if (e.key === 'Enter') { e.preventDefault(); commit(); }
       else if (e.key === 'Escape') { e.stopPropagation(); closeEditor(); }
-    });
+    }) as EventListener);
   });
 
   setTimeout(() => {

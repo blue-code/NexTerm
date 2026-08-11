@@ -142,6 +142,33 @@ describe('parseCodexSessionJsonl', () => {
     }]);
     expect(snap!.updatedAt).toBe(Date.parse('2026-08-07T01:09:19.542Z'));
   });
+
+  it('리셋 시각이 이미 지난 usage_limit_exceeded 기록은 더 이상 막혀 있다고 표시하지 않는다', () => {
+    // 리셋 시각(8/8 23:07)을 훌쩍 지난 시점(8/11)에 조회 — 실제로는 이미 리셋됐을 가능성이
+    // 높으므로 "100% 한도 초과"를 계속 보여주지 않고, 더 오래된 rate_limits로 폴백해야 한다.
+    const AFTER_RESET = Date.parse('2026-08-11T00:00:00Z');
+    const content = [
+      line('2026-07-23T01:00:00Z', {
+        primary: { used_percent: 11, window_minutes: 10080, resets_at: 1785261615 },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-07T01:09:19.542Z',
+        type: 'event_msg',
+        payload: {
+          type: 'task_complete',
+          error: {
+            message: "You've hit your usage limit. Upgrade to Pro, try again at Aug 8th, 2026 11:07 PM.",
+            codex_error_info: 'usage_limit_exceeded',
+          },
+        },
+      }),
+    ].join('\n');
+
+    const snap = parseCodexSessionJsonl(content, AFTER_RESET);
+    expect(snap).not.toBeNull();
+    expect(snap!.windows[0].label).toBe('주간');
+    expect(snap!.windows[0].usedPercent).toBe(11);
+  });
 });
 
 describe('parseCodexLimitResetDate', () => {

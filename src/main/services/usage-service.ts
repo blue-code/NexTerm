@@ -139,13 +139,18 @@ export function parseCodexSessionJsonl(content: string, now: number): UsageSnaps
       const err = record.payload?.error;
       if (err && err.codex_error_info === 'usage_limit_exceeded') {
         const resetsAt = typeof err.message === 'string' ? parseCodexLimitResetDate(err.message) : null;
-        return {
-          provider: 'codex',
-          ok: true,
-          windows: [{ label: '사용량 한도 초과', usedPercent: 100, resetsAt }],
-          updatedAt: eventMs,
-          stale: true,
-        };
+        // 파싱된 리셋 시각이 이미 지났다면(며칠~몇 주 전 발생한 오래된 차단 기록) 지금도
+        // 막혀 있다고 단정하지 않는다 — 그사이 리셋됐을 가능성이 높으므로 이 신호는 건너뛰고
+        // (계속 스캔) 더 오래된 rate_limits가 있으면 그걸로 폴백한다.
+        if (resetsAt === null || resetsAt > now) {
+          return {
+            provider: 'codex',
+            ok: true,
+            windows: [{ label: '사용량 한도 초과', usedPercent: 100, resetsAt }],
+            updatedAt: eventMs,
+            stale: true,
+          };
+        }
       }
 
       const rl = record.payload?.rate_limits ?? record.rate_limits;

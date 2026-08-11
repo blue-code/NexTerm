@@ -23,7 +23,7 @@
 
 const STORAGE_KEY = 'nexterm.commandHistory.v1';
 const MAX_ENTRIES = 500; // 너무 커지지 않도록 상한
-const MAX_CMD_LEN = 500;
+const MAX_CMD_LEN = 8000; // 긴 명령(여러 플래그, 인용된 스크립트 등)도 잘리지 않도록 넉넉히
 
 interface Entry {
   count: number;
