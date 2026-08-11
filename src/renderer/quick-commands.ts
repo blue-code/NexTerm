@@ -63,7 +63,8 @@ function openPopup(anchor: HTMLElement | undefined, cwd: string): void {
 
   const rect = anchor?.getBoundingClientRect();
   if (rect) {
-    const left = Math.min(window.innerWidth - 380, rect.left);
+    // 팝업 실제 너비(460px, #quick-commands-popup)만큼 뷰포트 안에 들어오도록 클램프
+    const left = Math.min(window.innerWidth - 468, rect.left);
     const top = Math.min(window.innerHeight - 420, rect.bottom + 6);
     popup.style.left = `${Math.max(8, left)}px`;
     popup.style.top = `${Math.max(8, top)}px`;
@@ -384,7 +385,8 @@ export function openQuickLaunchDropdown(anchor: HTMLElement, panelId: string, cw
   dropdownPopup = el;
 
   const rect = anchor.getBoundingClientRect();
-  const left = Math.min(window.innerWidth - 300, rect.left);
+  // 드롭다운 실제 너비(360px, #quick-launch-dropdown)만큼 뷰포트 안에 들어오도록 클램프
+  const left = Math.min(window.innerWidth - 368, rect.left);
   el.style.left = `${Math.max(8, left)}px`;
   el.style.top = `${Math.min(window.innerHeight - 200, rect.bottom + 4)}px`;
 
@@ -458,7 +460,8 @@ export function openCommandEditor(anchor: HTMLElement, entry: NamedCommand): voi
   editorPopup = el;
 
   const rect = anchor.getBoundingClientRect();
-  const left = Math.min(window.innerWidth - 320, rect.left);
+  // 편집 팝오버 실제 너비(360px, #quick-command-editor-popup)만큼 뷰포트 안에 들어오도록 클램프
+  const left = Math.min(window.innerWidth - 368, rect.left);
   el.style.left = `${Math.max(8, left)}px`;
   el.style.top = `${Math.min(window.innerHeight - 160, rect.bottom + 6)}px`;
 
