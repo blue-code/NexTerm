@@ -1,7 +1,6 @@
 # NexTerm
 
 AI 코딩 에이전트를 위한 Windows 터미널 멀티플렉서.
-[cmux](https://github.com/manaflow-ai/cmux)(macOS)의 핵심 기능을 Windows용 Electron 앱으로 재구현했다.
 
 ![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)
