@@ -10,32 +10,51 @@ const log = createLogger('session');
 
 let removeSnapshotRequest: (() => void) | null = null;
 
-/** 세션 스냅샷 IPC 리스너 등록 */
+/** 현재 렌더러 상태로 세션 스냅샷을 구성한다 (windowBounds는 main이 채운다) */
+function buildSnapshot() {
+  return {
+    version: 1 as const,
+    windowBounds: null as unknown as SessionSnapshot['windowBounds'],
+    workspaces: state.workspaces.map(ws => ({
+      ...ws,
+      panels: ws.panels.map((p: PanelState) => ({
+        ...p,
+        // 터미널 패널: xterm 버퍼에서 스크롤백 추출 (최대 4000라인)
+        scrollback: p.type === 'terminal' ? serializeTerminalBuffer(p.id) : undefined,
+      })),
+    })),
+    activeWorkspaceId: state.activeWorkspaceId,
+    sidebarWidth: state.sidebarWidth,
+    sidebarVisible: state.sidebarVisible,
+    savedAt: Date.now(),
+  };
+}
+
+/** 세션 스냅샷 IPC 리스너 등록 (8초 주기 자동저장 요청에 응답) */
 export function initSessionListeners(): void {
   removeSnapshotRequest = electronAPI.on('session:request-snapshot', () => {
-    const snapshot = {
-      version: 1 as const,
-      windowBounds: null as unknown as SessionSnapshot['windowBounds'],
-      workspaces: state.workspaces.map(ws => ({
-        ...ws,
-        panels: ws.panels.map((p: PanelState) => ({
-          ...p,
-          // 터미널 패널: xterm 버퍼에서 스크롤백 추출 (최대 4000라인)
-          scrollback: p.type === 'terminal' ? serializeTerminalBuffer(p.id) : undefined,
-        })),
-      })),
-      activeWorkspaceId: state.activeWorkspaceId,
-      sidebarWidth: state.sidebarWidth,
-      sidebarVisible: state.sidebarVisible,
-      savedAt: Date.now(),
-    };
-    electronAPI.send('session:save', snapshot);
+    electronAPI.send('session:save', buildSnapshot());
   });
 }
 
 export function cleanupSessionListeners(): void {
   removeSnapshotRequest?.();
   removeSnapshotRequest = null;
+}
+
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 워크스페이스/패널 구조가 바뀌는 즉시(생성·닫기·전환·이름변경·분할 등) 호출한다.
+ * 8초 주기 자동저장만으로는 그사이 앱이 갑자기 종료될 때 최신 구조를 놓칠 수 있어,
+ * 짧게 디바운스해 거의 즉시 반영되도록 한다.
+ */
+export function requestSessionSave(): void {
+  if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(() => {
+    saveDebounceTimer = null;
+    electronAPI.send('session:save', buildSnapshot());
+  }, 500);
 }
 
 /** 세션 복원 시도 */

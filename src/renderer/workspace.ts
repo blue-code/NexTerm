@@ -6,6 +6,7 @@ import { state, electronAPI, triggerSidebarRender, triggerContentRender, type Ru
 import { generateId } from './utils';
 import { splitNodeAt, removeNodeFrom, type SplitNode } from './layout';
 import { destroyTerminal } from './terminal';
+import { requestSessionSave } from './session';
 import type { PanelState } from '../shared/types';
 
 // IPC 리스너 해제 함수
@@ -33,6 +34,7 @@ export function createWorkspace(name?: string, cwd?: string): RuntimeWorkspace {
   state.focusedPanelId = panelId;
   selectWorkspace(id);
   triggerSidebarRender();
+  requestSessionSave();
   return workspace;
 }
 
@@ -40,6 +42,7 @@ export function selectWorkspace(id: string): void {
   state.activeWorkspaceId = id;
   triggerSidebarRender();
   triggerContentRender();
+  requestSessionSave();
 }
 
 export function closeWorkspace(id: string): void {
@@ -65,6 +68,7 @@ export function closeWorkspace(id: string): void {
   } else {
     triggerSidebarRender();
     triggerContentRender();
+    requestSessionSave();
   }
 }
 
@@ -73,6 +77,7 @@ export function renameWorkspace(id: string, newName: string): void {
   if (ws) {
     ws.name = newName;
     triggerSidebarRender();
+    requestSessionSave();
   }
 }
 
@@ -114,6 +119,7 @@ export function splitPanel(
   state.focusedPanelId = newPanelId;
 
   triggerContentRender();
+  requestSessionSave();
 }
 
 export function closePanel(panelId: string): void {
@@ -150,6 +156,7 @@ export function closePanel(panelId: string): void {
   }
 
   triggerContentRender();
+  requestSessionSave();
 }
 
 // ── 브라우저 패널 ──
@@ -175,6 +182,7 @@ export function openBrowserPanel(url?: string): void {
   state.focusedPanelId = panelId;
   ws.activePanelId = panelId;
   triggerContentRender();
+  requestSessionSave();
 }
 
 /** 포커스된 패널 줌/최대화 토글 */
@@ -211,6 +219,7 @@ export function openMarkdownPanel(filePath: string): void {
   state.focusedPanelId = panelId;
   ws.activePanelId = panelId;
   triggerContentRender();
+  requestSessionSave();
 }
 
 /** 닫은 브라우저 탭 복원 (Ctrl+Shift+T) */
@@ -276,6 +285,7 @@ export function initChildDetectListener(): void {
     ws.activePanelId = newPanelId;
     state.focusedPanelId = newPanelId;
     triggerContentRender();
+    requestSessionSave();
   });
 }
 
