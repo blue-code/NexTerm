@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
@@ -560,10 +561,34 @@ function setupPipeServer(): void {
   pipeServer.start();
 }
 
+// ── 자동 업데이트 (GitHub Releases 기반, electron-updater) ──
+// 배포 파이프라인은 electron-builder로 로컬 빌드 후 `gh release create`로 수동 업로드하며,
+// 이때 electron-builder가 함께 만든 latest.yml/블록맵도 반드시 같이 올려야 이 기능이 동작한다.
+// 개발 실행(app.isPackaged=false)에서는 갱신 피드가 없어 스킵한다.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4시간
+
+function setupAutoUpdater(): void {
+  if (!app.isPackaged) return;
+
+  autoUpdater.logger = {
+    info: (msg: unknown) => log.info(String(msg)),
+    warn: (msg: unknown) => log.warn(String(msg)),
+    error: (msg: unknown) => log.error(String(msg)),
+    debug: (msg: unknown) => log.debug(String(msg)),
+  };
+  autoUpdater.on('error', (err) => log.warn('자동 업데이트 확인 실패', err));
+
+  void autoUpdater.checkForUpdatesAndNotify();
+  setInterval(() => {
+    void autoUpdater.checkForUpdatesAndNotify();
+  }, UPDATE_CHECK_INTERVAL_MS);
+}
+
 // ── 앱 라이프사이클 ──
 
 app.whenReady().then(() => {
   terminalService.ensureBinScripts();
+  setupAutoUpdater();
 
   // 자식 프로세스 감시: 배치 파일의 start 명령으로 새 콘솔 창이 생성되면
   // 해당 프로세스를 종료하고 NexTerm 새 패널로 전환

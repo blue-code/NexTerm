@@ -1,6 +1,6 @@
 {
   "name": "nexterm",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "AI 코딩 에이전트를 위한 Windows 터미널 멀티플렉서",
   "main": "dist/main/main.js",
   "scripts": {
@@ -34,6 +34,7 @@
     "@xterm/addon-search": "^0.14.0",
     "@xterm/addon-webgl": "^0.17.0",
     "@xterm/xterm": "^5.4.0",
+    "electron-updater": "^6.8.9",
     "node-pty": "^1.0.0"
   },
   "build": {
@@ -52,6 +53,11 @@
     "asarUnpack": [
       "node_modules/node-pty/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "blue-code",
+      "repo": "NexTerm"
+    },
     "win": {
       "target": [
         {
