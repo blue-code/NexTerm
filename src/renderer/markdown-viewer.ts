@@ -4,6 +4,7 @@
  * 외부 의존성 없이 경량 마크다운 파서를 내장한다.
  */
 import { electronAPI } from './state';
+import { t } from '../shared/i18n';
 
 /** 마크다운 뷰어 DOM을 생성하고 패널에 마운트한다 */
 export function createMarkdownViewer(
@@ -42,10 +43,10 @@ async function loadAndRender(container: HTMLElement, filePath: string): Promise<
     if (text !== null) {
       container.innerHTML = markdownToHtml(text);
     } else {
-      container.innerHTML = '<p style="color:var(--text-muted)">파일을 읽을 수 없습니다.</p>';
+      container.innerHTML = `<p style="color:var(--text-muted)">${t('markdown.read_error')}</p>`;
     }
   } catch {
-    container.innerHTML = '<p style="color:var(--text-muted)">파일 로드 오류</p>';
+    container.innerHTML = `<p style="color:var(--text-muted)">${t('markdown.load_error')}</p>`;
   }
 }
 

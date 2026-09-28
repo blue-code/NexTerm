@@ -14,6 +14,7 @@
 import { state } from './state';
 import { pasteTextToPanel, fitTerminal } from './terminal';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 
 /** 패널에 제안을 등록한다. 기존 제안은 덮어쓴다. */
 export function setPendingInput(panelId: string, text: string): void {
@@ -118,10 +119,10 @@ function renderHint(panelId: string): void {
   hint.className = 'pending-input-hint';
   hint.id = hintIdFor(panelId);
   hint.innerHTML = `
-    <span class="pending-input-hint-label">다음 명령</span>
+    <span class="pending-input-hint-label">${escapeHtml(t('pending.next_command'))}</span>
     <span class="pending-input-hint-cmd">${escapeHtml(text)}</span>
-    <span class="pending-input-hint-help">Enter 실행 · 타이핑 취소 · ← → 편집</span>
-    <button class="pending-input-hint-close" title="취소">✕</button>
+    <span class="pending-input-hint-help">${escapeHtml(t('pending.help'))}</span>
+    <button class="pending-input-hint-close" title="${escapeHtml(t('common.cancel'))}">✕</button>
   `;
 
   hint.querySelector('.pending-input-hint-close')?.addEventListener('click', (e) => {

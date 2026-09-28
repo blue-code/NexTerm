@@ -43,6 +43,12 @@ import {
   AppSettings,
   UsageProviderId,
 } from '../shared/types';
+import { t, setLocale } from '../shared/i18n';
+// 로케일 등록 (import 시 자동 실행) — Windows Toast 알림 등 메인 프로세스에서도 t()를 쓰기 위함
+import '../shared/locales/ko';
+import '../shared/locales/en';
+import '../shared/locales/ja';
+import '../shared/locales/zh';
 
 // 싱글 인스턴스 보장
 const gotLock = app.requestSingleInstanceLock();
@@ -130,6 +136,7 @@ function saveSettings(settings: AppSettings): void {
 }
 
 let currentSettings: AppSettings = loadSettings();
+setLocale(currentSettings.language);
 
 /**
  * 에이전트 이름 → 자동 재개(resume) 명령 매핑
@@ -311,6 +318,7 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, (_event, partial: Partial<AppSettings>) => {
     currentSettings = { ...currentSettings, ...partial };
+    if (partial.language) setLocale(partial.language);
     saveSettings(currentSettings);
     windowManager.broadcast('settings:changed', currentSettings);
     return currentSettings;
@@ -384,8 +392,8 @@ function setupIpcHandlers(): void {
     if (status === 'completed' && agentName && !toastSentPanels.has(panelId)) {
       toastSentPanels.add(panelId);
       const toast = new Notification({
-        title: `${agentName} 작업 완료`,
-        body: '에이전트가 작업을 마치고 입력을 기다리고 있습니다.',
+        title: t('agent.tooltip_completed', { name: agentName }),
+        body: t('agent.toast_body'),
         icon: path.join(appRoot, 'assets/icon.png'),
       });
       toast.on('click', () => {

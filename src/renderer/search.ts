@@ -2,6 +2,7 @@
  * 터미널 내 검색 오버레이
  */
 import { state } from './state';
+import { t } from '../shared/i18n';
 
 export function toggleTerminalSearch(panelId: string): void {
   const pane = document.querySelector(`.split-pane[data-panel-id="${panelId}"]`);
@@ -16,11 +17,11 @@ export function toggleTerminalSearch(panelId: string): void {
   overlay = document.createElement('div');
   overlay.className = 'search-overlay';
   overlay.innerHTML = `
-    <input type="text" placeholder="검색..." autofocus>
+    <input type="text" placeholder="${t('search.placeholder')}" autofocus>
     <span class="search-count"></span>
-    <button class="panel-btn" data-dir="prev" title="이전">▲</button>
-    <button class="panel-btn" data-dir="next" title="다음">▼</button>
-    <button class="panel-btn" data-dir="close" title="닫기">✕</button>
+    <button class="panel-btn" data-dir="prev" title="${t('search.prev')}">▲</button>
+    <button class="panel-btn" data-dir="next" title="${t('search.next')}">▼</button>
+    <button class="panel-btn" data-dir="close" title="${t('panel.close')}">✕</button>
   `;
 
   const input = overlay.querySelector('input')!;

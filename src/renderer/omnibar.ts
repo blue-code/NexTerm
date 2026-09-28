@@ -4,6 +4,7 @@
  */
 import { electronAPI } from './state';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 import type { BrowserHistoryEntry } from '../shared/types';
 
 // 검색엔진 URL 템플릿 ({q}를 검색어로 치환)
@@ -31,7 +32,7 @@ export function createOmnibar(
   input.type = 'text';
   input.className = 'omnibar-input';
   input.value = initialUrl;
-  input.placeholder = 'URL 또는 검색어 입력...';
+  input.placeholder = t('browser.url_placeholder');
   input.spellcheck = false;
 
   const dropdown = document.createElement('div');

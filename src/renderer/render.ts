@@ -24,6 +24,7 @@ import { refreshPendingHint } from './pending-input';
 import { toggleQuickCommands, runNamedCommandInPanel, openQuickLaunchDropdown } from './quick-commands';
 import { getNamedCommands } from './named-commands';
 import { openPanelLauncher } from './panel-launcher';
+import { t } from '../shared/i18n';
 import type { PanelState } from '../shared/types';
 import type { RuntimeWorkspace } from './state';
 
@@ -58,14 +59,14 @@ export function renderSidebar(): void {
       tab.classList.add('agent-working');
       agentStatusHtml = `<div class="tab-agent-status tab-agent-status-active">
         <span class="agent-status-dot active"></span>
-        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 작업 중</span>
+        <span class="agent-status-text">${escapeHtml(t('sidebar.agent_working', { name: agentStatus.agentName || 'AI' }))}</span>
       </div>`;
     } else if (agentStatus.hasCompleted) {
       // 모든 에이전트가 완료된 경우에만 "완료" 표시
       tab.classList.add('agent-done');
       agentStatusHtml = `<div class="tab-agent-status tab-agent-status-completed">
         <span class="agent-status-dot completed"></span>
-        <span class="agent-status-text">${escapeHtml(agentStatus.agentName || 'AI')} 완료</span>
+        <span class="agent-status-text">${escapeHtml(t('sidebar.agent_completed', { name: agentStatus.agentName || 'AI' }))}</span>
       </div>`;
     }
 
@@ -103,7 +104,7 @@ export function renderWorkspaceContent(): void {
 
   const ws = getActiveWorkspace();
   if (!ws) {
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;">Ctrl+N으로 새 워크스페이스를 생성하세요</div>';
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;">${escapeHtml(t('workspace.empty'))}</div>`;
     return;
   }
 
@@ -244,7 +245,7 @@ function renderPanel(panel: PanelState): HTMLElement {
   header.className = 'panel-header';
 
   const typeIcons: Record<string, string> = { terminal: '▸', browser: '◎', markdown: '¶' };
-  const typeLabels: Record<string, string> = { terminal: '터미널', browser: '브라우저', markdown: '마크다운' };
+  const typeLabels: Record<string, string> = { terminal: t('panel.terminal'), browser: t('panel.browser'), markdown: t('panel.markdown') };
 
   // Vim 모드 배지: 터미널 제목에 vim/nvim이 포함되면 표시
   const isVimActive = panel.type === 'terminal' && panel.title && /\b(n?vim)\b/i.test(panel.title);
@@ -270,17 +271,17 @@ function renderPanel(panel: PanelState): HTMLElement {
       ${isVimActive ? '<span class="vim-badge">VIM</span>' : ''}
     </div>
     <div class="panel-actions">
-      ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="quick-cmd" title="빠른 명령 관리">»</button>' : ''}
+      ${panel.type === 'terminal' ? `<button class="panel-btn" data-action="quick-cmd" title="${escapeHtml(t('qcmd.manage_title'))}">»</button>` : ''}
       ${quickCommands.length > 0 ? `
         <span class="qcmd-splitbtn" title="${escapeHtml(quickCommands[0].name)}: ${escapeHtml(quickCommands[0].command)}">
           <button class="qcmd-splitbtn-run" data-id="${escapeHtml(quickCommands[0].id)}">▶ ${escapeHtml(quickCommands[0].name)}</button>
-          <button class="qcmd-splitbtn-chevron" title="등록된 명령 목록">⌄</button>
+          <button class="qcmd-splitbtn-chevron" title="${escapeHtml(t('qcmd.dropdown_title'))}">⌄</button>
         </span>
       ` : ''}
-      ${panel.type === 'terminal' ? '<button class="panel-btn" data-action="search" title="검색 (Ctrl+F)">⌕</button>' : ''}
-      <button class="panel-btn" data-action="split-h" title="수평 분할 (Ctrl+D)">⇥</button>
-      <button class="panel-btn" data-action="split-v" title="수직 분할 (Ctrl+Shift+D)">⤓</button>
-      <button class="panel-btn" data-action="close" title="닫기 (Ctrl+W)">✕</button>
+      ${panel.type === 'terminal' ? `<button class="panel-btn" data-action="search" title="${escapeHtml(t('panel.search'))} (Ctrl+F)">⌕</button>` : ''}
+      <button class="panel-btn" data-action="split-h" title="${escapeHtml(t('panel.split_h'))} (Ctrl+D)">⇥</button>
+      <button class="panel-btn" data-action="split-v" title="${escapeHtml(t('panel.split_v'))} (Ctrl+Shift+D)">⤓</button>
+      <button class="panel-btn" data-action="close" title="${escapeHtml(t('panel.close'))} (Ctrl+W)">✕</button>
     </div>
   `;
 
@@ -339,9 +340,9 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
   const navBtns = document.createElement('div');
   navBtns.className = 'browser-nav-btns';
   navBtns.innerHTML = `
-    <button class="nav-btn" data-nav="back" title="뒤로">◀</button>
-    <button class="nav-btn" data-nav="forward" title="앞으로">▶</button>
-    <button class="nav-btn" data-nav="reload" title="새로고침">↻</button>
+    <button class="nav-btn" data-nav="back" title="${escapeHtml(t('browser.back'))}">◀</button>
+    <button class="nav-btn" data-nav="forward" title="${escapeHtml(t('browser.forward'))}">▶</button>
+    <button class="nav-btn" data-nav="reload" title="${escapeHtml(t('browser.reload'))}">↻</button>
   `;
   toolbar.appendChild(navBtns);
 
@@ -365,8 +366,8 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
   const toolBtns = document.createElement('div');
   toolBtns.className = 'browser-tool-btns';
   toolBtns.innerHTML = `
-    <button class="nav-btn" data-action="find" title="페이지 내 검색 (Ctrl+F)">⌕</button>
-    <button class="nav-btn" data-action="devtools" title="개발자 도구">⚙</button>
+    <button class="nav-btn" data-action="find" title="${escapeHtml(t('browser.find_title'))}">⌕</button>
+    <button class="nav-btn" data-action="devtools" title="${escapeHtml(t('browser.devtools'))}">⚙</button>
   `;
   toolbar.appendChild(toolBtns);
 
@@ -394,7 +395,7 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
     const url = (e as any).url as string;
     omnibar.updateUrl(url);
     panel.url = url;
-    const title = webview.getTitle() || '브라우저';
+    const title = webview.getTitle() || t('panel.browser');
     panel.title = title;
     // 히스토리 기록 (about:blank 등 제외)
     if (url && !url.startsWith('about:')) {
@@ -413,10 +414,10 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
   const findOverlay = document.createElement('div');
   findOverlay.className = 'browser-find-overlay hidden';
   findOverlay.innerHTML = `
-    <input type="text" class="browser-find-input" placeholder="페이지에서 찾기...">
-    <button class="nav-btn find-prev" title="이전">▲</button>
-    <button class="nav-btn find-next" title="다음">▼</button>
-    <button class="nav-btn find-close" title="닫기">✕</button>
+    <input type="text" class="browser-find-input" placeholder="${escapeHtml(t('browser.find_placeholder'))}">
+    <button class="nav-btn find-prev" title="${escapeHtml(t('search.prev'))}">▲</button>
+    <button class="nav-btn find-next" title="${escapeHtml(t('search.next'))}">▼</button>
+    <button class="nav-btn find-close" title="${escapeHtml(t('panel.close'))}">✕</button>
   `;
 
   const findInput = findOverlay.querySelector('.browser-find-input') as HTMLInputElement;
@@ -538,11 +539,11 @@ function showWorkspaceContextMenu(workspaceId: string, x: number, y: number): vo
   `;
 
   const items = [
-    { label: '이름 변경', action: () => promptRenameWorkspace(workspaceId) },
-    { label: '색상 설정', action: () => promptWorkspaceColor(workspaceId) },
-    { label: '새 터미널 분할', action: () => { selectWorkspace(workspaceId); splitPanel('horizontal'); } },
-    { label: '브라우저 열기', action: () => { selectWorkspace(workspaceId); openBrowserPanel(); } },
-    { label: '닫기', action: () => closeWorkspace(workspaceId) },
+    { label: t('ctx.rename'), action: () => promptRenameWorkspace(workspaceId) },
+    { label: t('ctx.set_color'), action: () => promptWorkspaceColor(workspaceId) },
+    { label: t('ctx.new_split'), action: () => { selectWorkspace(workspaceId); splitPanel('horizontal'); } },
+    { label: t('ctx.open_browser'), action: () => { selectWorkspace(workspaceId); openBrowserPanel(); } },
+    { label: t('ctx.close'), action: () => closeWorkspace(workspaceId) },
   ];
 
   for (const item of items) {
@@ -570,22 +571,22 @@ export function promptRenameWorkspace(wsId?: string): void {
   palette.classList.remove('hidden');
   const input = document.getElementById('palette-input') as HTMLInputElement;
   input.value = ws.name;
-  input.placeholder = '새 이름 입력...';
+  input.placeholder = t('workspace.rename_prompt');
   input.select();
 
   const results = document.getElementById('palette-results')!;
-  results.innerHTML = '<div style="padding:12px 18px;color:var(--text-secondary);font-size:13px;">Enter로 확인, Esc로 취소</div>';
+  results.innerHTML = `<div style="padding:12px 18px;color:var(--text-secondary);font-size:13px;">${escapeHtml(t('workspace.rename_hint'))}</div>`;
 
   const handler = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       renameWorkspace(id!, input.value.trim() || ws.name);
       palette.classList.add('hidden');
       input.removeEventListener('keydown', handler);
-      input.placeholder = '명령 검색...';
+      input.placeholder = t('cmd.search_placeholder');
     } else if (e.key === 'Escape') {
       palette.classList.add('hidden');
       input.removeEventListener('keydown', handler);
-      input.placeholder = '명령 검색...';
+      input.placeholder = t('cmd.search_placeholder');
     }
   };
   input.addEventListener('keydown', handler);
@@ -612,7 +613,7 @@ function promptWorkspaceColor(wsId: string): void {
   `;
 
   popup.innerHTML = `
-    <div style="font-size:13px;margin-bottom:12px;color:var(--text-secondary)">워크스페이스 색상</div>
+    <div style="font-size:13px;margin-bottom:12px;color:var(--text-secondary)">${escapeHtml(t('workspace.color_title'))}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;max-width:220px"></div>
   `;
 

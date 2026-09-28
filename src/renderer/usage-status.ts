@@ -14,7 +14,37 @@ import { state, electronAPI } from './state';
 import { fitAllTerminals } from './terminal';
 import { formatRemaining, formatPercent } from '../shared/usage-format';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 import type { UsageProviderId, UsageSnapshot } from '../shared/types';
+
+// 메인 프로세스(usage-service.ts)가 만드는 고정 한국어 문자열 → i18n 키로 변환한다.
+// main은 아직 한국어 텍스트를 그대로 내려주므로(IPC 계약을 건드리지 않기 위해),
+// 알려진 패턴만 매칭해 번역하고 나머지(안티그래비티 모델명, 예상 못한 런타임 에러 등)는
+// 그대로 통과시킨다.
+const USAGE_TEXT_PATTERNS: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
+  [/^세션\((\d+)h\)$/, (m) => t('usage.window_session', { hours: m[1] })],
+  [/^주간$/, () => t('usage.window_weekly')],
+  [/^(\d+)일$/, (m) => t('usage.window_days', { days: m[1] })],
+  [/^사용량 한도 초과$/, () => t('usage.limit_exceeded')],
+  [/^사용량 응답 형식을 해석할 수 없습니다$/, () => t('usage.err.claude_parse')],
+  [/^Claude Code 토큰 만료 — claude를 한 번 실행해 갱신하세요$/, () => t('usage.err.claude_token_expired')],
+  [/^Claude Code 로그인 정보 없음 \(~\/\.claude\/\.credentials\.json\)$/, () => t('usage.err.claude_no_creds')],
+  [/^사용량 API 오류 \(HTTP (\d+)\)$/, (m) => t('usage.err.claude_http', { status: m[1] })],
+  [/^Codex 세션 기록 없음 \(~\/\.codex\/sessions\)$/, () => t('usage.err.codex_no_sessions')],
+  [/^최근 세션에서 rate limit 정보를 찾지 못했습니다$/, () => t('usage.err.codex_no_rate_limit')],
+  [/^Antigravity 로그인 정보 없음 — agy로 로그인하세요$/, () => t('usage.err.antigravity_no_login')],
+  [/^인증 만료 — agy로 다시 로그인하세요$/, () => t('usage.err.antigravity_auth_expired')],
+  [/^쿼터 API 오류 \(HTTP (.+)\)$/, (m) => t('usage.err.antigravity_http', { status: m[1] })],
+  [/^쿼터 정보를 찾을 수 없습니다$/, () => t('usage.err.antigravity_no_quota')],
+];
+
+function translateUsageText(text: string): string {
+  for (const [re, fn] of USAGE_TEXT_PATTERNS) {
+    const m = text.match(re);
+    if (m) return fn(m);
+  }
+  return text;
+}
 
 const PROVIDER_LABELS: Record<UsageProviderId, string> = {
   none: '',
@@ -46,6 +76,11 @@ export function initUsageStatus(): void {
     void refreshUsage(true);
   });
   applyUsageVisibility();
+}
+
+/** 언어 변경 시 호출 — 네트워크 재조회 없이 캐시된 스냅샷을 새 언어로 다시 그린다 */
+export function reapplyUsageLocale(): void {
+  if (lastSnapshots.length > 0) renderSnapshots(lastSnapshots);
 }
 
 /** 설정 변경(표시 항목/주기) 시 호출 — 사용량 영역 토글 + 폴링 재시작 */
@@ -106,7 +141,7 @@ async function refreshUsage(force: boolean): Promise<void> {
     lastSnapshots = snapshots;
     renderSnapshots(snapshots);
   } catch {
-    renderText('사용량 조회 실패');
+    renderText(t('usage.query_failed'));
   } finally {
     refreshing = false;
     btn?.classList.remove('spinning');
@@ -125,7 +160,7 @@ function renderGroup(snap: UsageSnapshot, now: number): string {
   const providerLabel = PROVIDER_LABELS[snap.provider] || snap.provider;
 
   if (!snap.ok) {
-    const reason = escapeHtml(snap.error || '연결되지 않음');
+    const reason = escapeHtml(snap.error ? translateUsageText(snap.error) : t('usage.not_connected'));
     return `<span class="usage-group usage-error" title="${reason}"><span class="usage-provider">${escapeHtml(providerLabel)}</span></span>`;
   }
 
@@ -133,14 +168,16 @@ function renderGroup(snap: UsageSnapshot, now: number): string {
     const pct = formatPercent(w.usedPercent);
     // resetsAt이 이미 지난 값이면(오래된 세션 기록 기반 stale 데이터) "곧 리셋"으로
     // 잘못 표시하지 않고 생략한다 — 실제 리셋 여부를 알 수 없는 상태이기 때문
-    const reset = (w.resetsAt !== null && w.resetsAt > now) ? ` (${formatRemaining(w.resetsAt - now)} 후 리셋)` : '';
+    const reset = (w.resetsAt !== null && w.resetsAt > now)
+      ? ` (${t('usage.reset_suffix', { time: formatRemaining(w.resetsAt - now) })})`
+      : '';
     const warn = (w.usedPercent ?? 0) >= 80 ? ' usage-warn' : '';
-    return `<span class="usage-window${warn}">${escapeHtml(w.label)} <b>${escapeHtml(pct)}</b>${escapeHtml(reset)}</span>`;
+    return `<span class="usage-window${warn}">${escapeHtml(translateUsageText(w.label))} <b>${escapeHtml(pct)}</b>${escapeHtml(reset)}</span>`;
   });
 
   // codex처럼 마지막 활동 시점 기준 데이터는 기준 시각을 함께 표시
   const staleNote = snap.stale
-    ? `<span class="usage-stale" title="마지막 활동 시점 기준 데이터">${escapeHtml(formatRemaining(now - snap.updatedAt))} 전 기준</span>`
+    ? `<span class="usage-stale" title="${escapeHtml(t('usage.stale_tooltip'))}">${escapeHtml(t('usage.stale_suffix', { time: formatRemaining(now - snap.updatedAt) }))}</span>`
     : '';
 
   return `<span class="usage-group"><span class="usage-provider">${escapeHtml(providerLabel)}</span>${parts.join('<span class="usage-sep">·</span>')}${staleNote}</span>`;

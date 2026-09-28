@@ -24,6 +24,7 @@ import {
 } from './command-history';
 import { pasteTextToPanel } from './terminal';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 
 const POPUP_ID = 'quick-commands-popup';
 const MAX_HISTORY_ITEMS = 50;
@@ -115,16 +116,16 @@ function buildPopup(): HTMLElement {
   el.innerHTML = `
     <div class="qcmd-header">
       <div>
-        <div class="qcmd-header-title">빠른 명령</div>
+        <div class="qcmd-header-title">${escapeHtml(t('qcmd.title'))}</div>
         <div class="qcmd-header-cwd"></div>
       </div>
       <div class="qcmd-header-actions">
-        <button class="icon-btn" data-action="add" title="새 명령 추가">+</button>
-        <button class="icon-btn" data-action="close" title="닫기">✕</button>
+        <button class="icon-btn" data-action="add" title="${escapeHtml(t('qcmd.add_title'))}">+</button>
+        <button class="icon-btn" data-action="close" title="${escapeHtml(t('panel.close'))}">✕</button>
       </div>
     </div>
     <div class="qcmd-search">
-      <input type="text" placeholder="빠른 명령 검색..." spellcheck="false" autocomplete="off">
+      <input type="text" placeholder="${escapeHtml(t('qcmd.search_placeholder'))}" spellcheck="false" autocomplete="off">
     </div>
     <div class="qcmd-list"></div>
   `;
@@ -156,14 +157,14 @@ function renderList(): void {
   }
 
   if (named.length === 0 && !addingNew) {
-    parts.push(`<div class="qcmd-empty">${filter ? '일치하는 명령이 없습니다.' : '이 디렉토리에 저장된 빠른 명령이 없습니다.<br>+ 버튼으로 이름을 붙여 저장하세요.'}</div>`);
+    parts.push(`<div class="qcmd-empty">${filter ? escapeHtml(t('qcmd.empty_filtered')) : t('qcmd.empty')}</div>`);
   } else {
     for (const entry of named) {
       parts.push(editingId === entry.id ? renderForm(entry) : renderNamedRow(entry));
     }
   }
 
-  parts.push(`<div class="qcmd-section-toggle" data-action="toggle-history">${historyExpanded ? '▽' : '▷'} 명령</div>`);
+  parts.push(`<div class="qcmd-section-toggle" data-action="toggle-history">${historyExpanded ? '▽' : '▷'} ${escapeHtml(t('qcmd.section_history'))}</div>`);
   if (historyExpanded) {
     parts.push(renderHistorySection(filter));
   }
@@ -175,11 +176,11 @@ function renderList(): void {
 function renderForm(entry: NamedCommand | null): string {
   return `
     <div class="qcmd-form" data-id="${entry ? escapeHtml(entry.id) : ''}">
-      <input class="qcmd-form-name" placeholder="이름 (예: run)" value="${entry ? escapeHtml(entry.name) : ''}">
-      <textarea class="qcmd-form-cmd" placeholder="명령어" rows="3" spellcheck="false">${entry ? escapeHtml(entry.command) : ''}</textarea>
+      <input class="qcmd-form-name" placeholder="${escapeHtml(t('qcmd.name_placeholder'))}" value="${entry ? escapeHtml(entry.name) : ''}">
+      <textarea class="qcmd-form-cmd" placeholder="${escapeHtml(t('qcmd.cmd_placeholder'))}" rows="3" spellcheck="false">${entry ? escapeHtml(entry.command) : ''}</textarea>
       <div class="qcmd-form-actions">
-        <button class="icon-btn" data-act="save" title="저장">✓</button>
-        <button class="icon-btn" data-act="cancel" title="취소">✕</button>
+        <button class="icon-btn" data-act="save" title="${escapeHtml(t('common.save'))}">✓</button>
+        <button class="icon-btn" data-act="cancel" title="${escapeHtml(t('common.cancel'))}">✕</button>
       </div>
     </div>
   `;
@@ -187,14 +188,14 @@ function renderForm(entry: NamedCommand | null): string {
 
 function renderNamedRow(entry: NamedCommand): string {
   return `
-    <div class="qcmd-item" data-id="${escapeHtml(entry.id)}" title="클릭: 바로 실행">
+    <div class="qcmd-item" data-id="${escapeHtml(entry.id)}" title="${escapeHtml(t('qcmd.run_tooltip'))}">
       <div class="qcmd-item-main">
         <span class="qcmd-item-name">▶ ${escapeHtml(entry.name)}</span>
         <span class="qcmd-item-cmd">${escapeHtml(entry.command)}</span>
       </div>
       <span class="qcmd-item-actions">
-        <button class="icon-btn" data-act="edit" title="수정">✎</button>
-        <button class="icon-btn" data-act="delete" title="삭제">✕</button>
+        <button class="icon-btn" data-act="edit" title="${escapeHtml(t('common.edit'))}">✎</button>
+        <button class="icon-btn" data-act="delete" title="${escapeHtml(t('common.delete'))}">✕</button>
       </span>
     </div>
   `;
@@ -203,15 +204,15 @@ function renderNamedRow(entry: NamedCommand): string {
 function renderHistorySection(filter: string): string {
   const items = getTopCommands(MAX_HISTORY_ITEMS, filter);
   if (items.length === 0) {
-    return `<div class="qcmd-empty">${filter ? '일치하는 기록이 없습니다.' : '아직 자동 기록된 명령이 없습니다.'}</div>`;
+    return `<div class="qcmd-empty">${filter ? escapeHtml(t('qcmd.history_empty_filtered')) : escapeHtml(t('qcmd.history_empty'))}</div>`;
   }
   return items.map((item) => `
-    <div class="fcmd-item qcmd-history-item" data-cmd="${escapeHtml(item.cmd)}" title="클릭: 입력, Shift+클릭: 실행">
+    <div class="fcmd-item qcmd-history-item" data-cmd="${escapeHtml(item.cmd)}" title="${escapeHtml(t('fcmd.tooltip'))}">
       <span class="fcmd-item-text">${escapeHtml(item.cmd)}</span>
       <span class="fcmd-item-count">${item.count}</span>
       <span class="fcmd-item-actions">
-        <button class="icon-btn" data-act="run" title="실행 (Enter 포함)">▶</button>
-        <button class="icon-btn" data-act="delete" title="삭제">✕</button>
+        <button class="icon-btn" data-act="run" title="${escapeHtml(t('fcmd.run_title'))}">▶</button>
+        <button class="icon-btn" data-act="delete" title="${escapeHtml(t('common.delete'))}">✕</button>
       </span>
     </div>
   `).join('');
@@ -319,12 +320,12 @@ function runInFocusedPanel(cmd: string): void {
 function insertIntoFocusedPanel(cmd: string, execute: boolean): void {
   const panelId = state.focusedPanelId;
   if (!panelId) {
-    alert('터미널 패널에 먼저 포커스하세요.');
+    alert(t('alert.focus_terminal_first'));
     return;
   }
   const inst = state.terminalInstances.get(panelId);
   if (!inst) {
-    alert('포커스된 패널이 터미널이 아닙니다.');
+    alert(t('alert.not_terminal_panel'));
     return;
   }
   pasteTextToPanel(panelId, execute ? `${cmd}\r` : cmd);
@@ -370,14 +371,14 @@ export function openQuickLaunchDropdown(anchor: HTMLElement, panelId: string, cw
   const el = document.createElement('div');
   el.id = 'quick-launch-dropdown';
   el.innerHTML = entries.map((entry) => `
-    <div class="qcmd-item" data-id="${escapeHtml(entry.id)}" title="클릭: 실행">
+    <div class="qcmd-item" data-id="${escapeHtml(entry.id)}" title="${escapeHtml(t('qcmd.run_tooltip'))}">
       <div class="qcmd-item-main">
         <span class="qcmd-item-name">▶ ${escapeHtml(entry.name)}</span>
         <span class="qcmd-item-cmd">${escapeHtml(entry.command)}</span>
       </div>
       <span class="qcmd-item-actions">
-        <button class="icon-btn" data-act="edit" title="수정">✎</button>
-        <button class="icon-btn" data-act="delete" title="삭제">✕</button>
+        <button class="icon-btn" data-act="edit" title="${escapeHtml(t('common.edit'))}">✎</button>
+        <button class="icon-btn" data-act="delete" title="${escapeHtml(t('common.delete'))}">✕</button>
       </span>
     </div>
   `).join('');
@@ -447,12 +448,12 @@ export function openCommandEditor(anchor: HTMLElement, entry: NamedCommand): voi
   el.id = 'quick-command-editor-popup';
   el.innerHTML = `
     <div class="qcmd-form">
-      <input class="qcmd-form-name" placeholder="이름" value="${escapeHtml(entry.name)}">
-      <textarea class="qcmd-form-cmd" placeholder="명령어" rows="3" spellcheck="false">${escapeHtml(entry.command)}</textarea>
+      <input class="qcmd-form-name" placeholder="${escapeHtml(t('qcmd.name_placeholder'))}" value="${escapeHtml(entry.name)}">
+      <textarea class="qcmd-form-cmd" placeholder="${escapeHtml(t('qcmd.cmd_placeholder'))}" rows="3" spellcheck="false">${escapeHtml(entry.command)}</textarea>
       <div class="qcmd-form-actions">
-        <button class="icon-btn" data-act="delete" title="삭제">🗑</button>
-        <button class="icon-btn" data-act="save" title="저장">✓</button>
-        <button class="icon-btn" data-act="cancel" title="취소">✕</button>
+        <button class="icon-btn" data-act="delete" title="${escapeHtml(t('common.delete'))}">🗑</button>
+        <button class="icon-btn" data-act="save" title="${escapeHtml(t('common.save'))}">✓</button>
+        <button class="icon-btn" data-act="cancel" title="${escapeHtml(t('common.cancel'))}">✕</button>
       </div>
     </div>
   `;

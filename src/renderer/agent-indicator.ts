@@ -3,6 +3,7 @@
  * 패널 헤더와 사이드바에 에이전트 활성/완료 상태를 표시한다.
  */
 import { state, electronAPI, triggerSidebarRender } from './state';
+import { t } from '../shared/i18n';
 import type { AgentStatusChangePayload } from '../shared/agent-types';
 
 /** 에이전트 상태 변경 IPC 리스너 등록 */
@@ -52,8 +53,8 @@ function updatePanelBadge(panelId: string): void {
   badge.className = `agent-badge agent-${info.status}`;
   badge.textContent = info.name ?? 'AI';
   badge.title = info.status === 'active'
-    ? `${info.name} 작업 중...`
-    : `${info.name} 작업 완료`;
+    ? t('agent.tooltip_working', { name: info.name ?? 'AI' })
+    : t('agent.tooltip_completed', { name: info.name ?? 'AI' });
 
   // 패널 타이틀 영역에 삽입
   const titleDiv = header.querySelector('.panel-title');

@@ -12,6 +12,7 @@ import {
 } from './command-history';
 import { pasteTextToPanel } from './terminal';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 
 const POPUP_ID = 'frequent-commands-popup';
 const MAX_ITEMS = 50;
@@ -85,14 +86,14 @@ function buildPopup(): HTMLElement {
   el.className = 'hidden';
   el.innerHTML = `
     <div class="fcmd-header">
-      <div class="fcmd-header-title">자주쓰는 명령어</div>
+      <div class="fcmd-header-title">${escapeHtml(t('fcmd.title'))}</div>
       <div class="fcmd-header-actions">
-        <button class="icon-btn" data-action="clear" title="전체 삭제">🗑</button>
-        <button class="icon-btn" data-action="close" title="닫기">✕</button>
+        <button class="icon-btn" data-action="clear" title="${escapeHtml(t('fcmd.clear_all'))}">🗑</button>
+        <button class="icon-btn" data-action="close" title="${escapeHtml(t('panel.close'))}">✕</button>
       </div>
     </div>
     <div class="fcmd-search">
-      <input type="text" placeholder="필터..." spellcheck="false" autocomplete="off">
+      <input type="text" placeholder="${escapeHtml(t('fcmd.filter_placeholder'))}" spellcheck="false" autocomplete="off">
     </div>
     <div class="fcmd-list"></div>
   `;
@@ -104,7 +105,7 @@ function buildPopup(): HTMLElement {
   searchInput.addEventListener('input', () => renderList());
   el.querySelector('[data-action="close"]')?.addEventListener('click', () => closePopup());
   el.querySelector('[data-action="clear"]')?.addEventListener('click', () => {
-    if (confirm('자주쓰는 명령어 기록을 모두 삭제할까요?')) {
+    if (confirm(t('fcmd.confirm_clear'))) {
       clearAllCommands();
       renderList();
     }
@@ -121,7 +122,7 @@ function renderList(): void {
   if (items.length === 0) {
     listEl.innerHTML = `
       <div class="fcmd-empty">
-        ${filter ? '일치하는 명령어가 없습니다.' : '아직 기록된 명령어가 없습니다.<br>터미널에서 명령을 실행하면 자동으로 누적됩니다.'}
+        ${filter ? escapeHtml(t('fcmd.empty_filtered')) : t('fcmd.empty')}
       </div>
     `;
     return;
@@ -131,13 +132,13 @@ function renderList(): void {
   for (const item of items) {
     const row = document.createElement('div');
     row.className = 'fcmd-item';
-    row.title = '클릭: 입력, Shift+클릭: 실행';
+    row.title = t('fcmd.tooltip');
     row.innerHTML = `
       <span class="fcmd-item-text">${escapeHtml(item.cmd)}</span>
       <span class="fcmd-item-count">${item.count}</span>
       <span class="fcmd-item-actions">
-        <button class="icon-btn" data-act="run" title="실행 (Enter 포함)">▶</button>
-        <button class="icon-btn" data-act="delete" title="삭제">✕</button>
+        <button class="icon-btn" data-act="run" title="${escapeHtml(t('fcmd.run_title'))}">▶</button>
+        <button class="icon-btn" data-act="delete" title="${escapeHtml(t('common.delete'))}">✕</button>
       </span>
     `;
 
@@ -171,12 +172,12 @@ function renderList(): void {
 function insertCommandIntoFocusedPanel(cmd: string, execute: boolean): void {
   const panelId = state.focusedPanelId;
   if (!panelId) {
-    alert('터미널 패널에 먼저 포커스하세요.');
+    alert(t('alert.focus_terminal_first'));
     return;
   }
   const inst = state.terminalInstances.get(panelId);
   if (!inst) {
-    alert('포커스된 패널이 터미널이 아닙니다.');
+    alert(t('alert.not_terminal_panel'));
     return;
   }
   pasteTextToPanel(panelId, execute ? `${cmd}\r` : cmd);

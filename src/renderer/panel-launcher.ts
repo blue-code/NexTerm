@@ -8,6 +8,7 @@
 import { state } from './state';
 import { splitPanel } from './workspace';
 import { escapeHtml } from './utils';
+import { t } from '../shared/i18n';
 
 const POPUP_ID = 'panel-launcher-popup';
 
@@ -22,26 +23,32 @@ interface LaunchOption {
 // 검증된 CLI 플래그만 사용 (각 CLI --help로 확인):
 // claude --dangerously-skip-permissions / codex --dangerously-bypass-approvals-and-sandbox /
 // grok --always-approve / agy --dangerously-skip-permissions / hermes chat --yolo
-const SHELL_OPTIONS: LaunchOption[] = [
-  { id: 'powershell', label: 'PowerShell', hint: '셸', shell: 'powershell.exe' },
-  { id: 'cmd', label: 'CMD', hint: '셸', shell: 'cmd.exe' },
-  { id: 'git-bash', label: 'Git Bash', hint: '셸', shell: 'git-bash' },
-];
+// 라벨에 번역 문자열이 섞여 있어 로케일 변경 후에도 최신 값을 쓰도록 매번 새로 만든다.
+function getShellOptions(): LaunchOption[] {
+  const hint = t('plauncher.hint_shell');
+  return [
+    { id: 'powershell', label: 'PowerShell', hint, shell: 'powershell.exe' },
+    { id: 'cmd', label: 'CMD', hint, shell: 'cmd.exe' },
+    { id: 'git-bash', label: 'Git Bash', hint, shell: 'git-bash' },
+  ];
+}
 
-const AI_OPTIONS: LaunchOption[] = [
-  { id: 'claude', label: 'Claude Code', hint: 'AI', initialCommand: 'claude' },
-  { id: 'claude-skip', label: 'Claude Code (권한 스킵)', hint: 'AI', initialCommand: 'claude --dangerously-skip-permissions' },
-  { id: 'codex', label: 'Codex', hint: 'AI', initialCommand: 'codex' },
-  { id: 'codex-skip', label: 'Codex (권한 스킵)', hint: 'AI', initialCommand: 'codex --dangerously-bypass-approvals-and-sandbox' },
-  { id: 'grok', label: 'Grok', hint: 'AI', initialCommand: 'grok' },
-  { id: 'grok-skip', label: 'Grok (권한 스킵)', hint: 'AI', initialCommand: 'grok --always-approve' },
-  { id: 'antigravity', label: 'Antigravity', hint: 'AI', initialCommand: 'agy' },
-  { id: 'antigravity-skip', label: 'Antigravity (권한 스킵)', hint: 'AI', initialCommand: 'agy --dangerously-skip-permissions' },
-  { id: 'hermes', label: 'Hermes', hint: 'AI', initialCommand: 'hermes chat' },
-  { id: 'hermes-skip', label: 'Hermes (권한 스킵)', hint: 'AI', initialCommand: 'hermes chat --yolo' },
-];
-
-const ALL_OPTIONS = [...SHELL_OPTIONS, ...AI_OPTIONS];
+function getAiOptions(): LaunchOption[] {
+  const hint = t('plauncher.hint_ai');
+  const skip = t('plauncher.skip_permissions');
+  return [
+    { id: 'claude', label: 'Claude Code', hint, initialCommand: 'claude' },
+    { id: 'claude-skip', label: `Claude Code ${skip}`, hint, initialCommand: 'claude --dangerously-skip-permissions' },
+    { id: 'codex', label: 'Codex', hint, initialCommand: 'codex' },
+    { id: 'codex-skip', label: `Codex ${skip}`, hint, initialCommand: 'codex --dangerously-bypass-approvals-and-sandbox' },
+    { id: 'grok', label: 'Grok', hint, initialCommand: 'grok' },
+    { id: 'grok-skip', label: `Grok ${skip}`, hint, initialCommand: 'grok --always-approve' },
+    { id: 'antigravity', label: 'Antigravity', hint, initialCommand: 'agy' },
+    { id: 'antigravity-skip', label: `Antigravity ${skip}`, hint, initialCommand: 'agy --dangerously-skip-permissions' },
+    { id: 'hermes', label: 'Hermes', hint, initialCommand: 'hermes chat' },
+    { id: 'hermes-skip', label: `Hermes ${skip}`, hint, initialCommand: 'hermes chat --yolo' },
+  ];
+}
 
 let popup: HTMLElement | null = null;
 let searchInput: HTMLInputElement | null = null;
@@ -102,7 +109,7 @@ function buildPopup(): HTMLElement {
   el.className = 'hidden';
   el.innerHTML = `
     <div class="plauncher-search">
-      <input type="text" placeholder="셸/AI 검색..." spellcheck="false" autocomplete="off">
+      <input type="text" placeholder="${escapeHtml(t('plauncher.search_placeholder'))}" spellcheck="false" autocomplete="off">
     </div>
     <div class="plauncher-list"></div>
   `;
@@ -118,11 +125,12 @@ function buildPopup(): HTMLElement {
 function renderList(filter: string): void {
   if (!listEl) return;
   const q = filter.trim().toLowerCase();
-  const shellItems = SHELL_OPTIONS.filter(o => o.label.toLowerCase().includes(q));
-  const aiItems = AI_OPTIONS.filter(o => o.label.toLowerCase().includes(q));
+  const allOptions = [...getShellOptions(), ...getAiOptions()];
+  const shellItems = getShellOptions().filter(o => o.label.toLowerCase().includes(q));
+  const aiItems = getAiOptions().filter(o => o.label.toLowerCase().includes(q));
 
   if (shellItems.length === 0 && aiItems.length === 0) {
-    listEl.innerHTML = '<div class="plauncher-empty">일치하는 항목이 없습니다.</div>';
+    listEl.innerHTML = `<div class="plauncher-empty">${escapeHtml(t('plauncher.empty'))}</div>`;
     return;
   }
 
@@ -134,14 +142,14 @@ function renderList(filter: string): void {
   `;
 
   listEl.innerHTML = `
-    ${shellItems.length > 0 ? `<div class="plauncher-section">터미널 셸</div>${shellItems.map(rowHtml).join('')}` : ''}
-    ${aiItems.length > 0 ? `<div class="plauncher-section">AI 에이전트</div>${aiItems.map(rowHtml).join('')}` : ''}
+    ${shellItems.length > 0 ? `<div class="plauncher-section">${escapeHtml(t('plauncher.section_shell'))}</div>${shellItems.map(rowHtml).join('')}` : ''}
+    ${aiItems.length > 0 ? `<div class="plauncher-section">${escapeHtml(t('plauncher.section_ai'))}</div>${aiItems.map(rowHtml).join('')}` : ''}
   `;
 
   listEl.querySelectorAll('.plauncher-item').forEach((row) => {
     row.addEventListener('click', () => {
       const id = (row as HTMLElement).dataset.id;
-      const option = ALL_OPTIONS.find(o => o.id === id);
+      const option = allOptions.find(o => o.id === id);
       if (option) selectOption(option);
       closePopup();
     });

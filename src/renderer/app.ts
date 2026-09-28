@@ -21,9 +21,10 @@ import { restoreSession, initSessionListeners } from './session';
 import { initIpcCommands } from './ipc-commands';
 import { initAgentListeners } from './agent-indicator';
 import { toggleFrequentCommands } from './frequent-commands';
-import { initUsageStatus, applyUsageVisibility } from './usage-status';
+import { initUsageStatus, applyUsageVisibility, reapplyUsageLocale } from './usage-status';
 import { createLogger } from './logger';
-import { setLocale, getSupportedLocales } from '../shared/i18n';
+import { t, setLocale, getSupportedLocales, onLocaleChange } from '../shared/i18n';
+import { applyI18n } from './i18n-dom';
 // 로케일 등록 (import 시 자동 실행)
 import '../shared/locales/ko';
 import '../shared/locales/en';
@@ -37,8 +38,35 @@ function normalizeShellSetting(shell?: string): string {
   return shell === 'bash.exe' ? 'git-bash' : (shell || 'powershell.exe');
 }
 
+// 테마 이름 표시 — dark/light/sakura 등 일반 명사만 번역하고,
+// dracula/kanagawa 같은 고유명사 테마는 그대로 대문자만 맞춰 보여준다.
+const TRANSLATED_THEME_KEYS: Record<string, string> = {
+  dark: 'theme.dark',
+  light: 'theme.light',
+  sakura: 'theme.sakura',
+  monokai: 'theme.monokai',
+  nord: 'theme.nord',
+  solarized: 'theme.solarized',
+};
+function themeLabel(name: string): string {
+  const key = TRANSLATED_THEME_KEYS[name];
+  return key ? t(key) : name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 // ── 렌더링 콜백 연결 ──
 setRenderCallbacks(renderSidebar, renderWorkspaceContent);
+
+// 언어 변경 시 정적 마크업(data-i18n) + 동적으로 그려지는 사이드바/콘텐츠를 다시 그린다
+onLocaleChange(() => {
+  applyI18n();
+  renderSidebar();
+  renderWorkspaceContent();
+  reapplyUsageLocale();
+  // 테마 드롭다운은 동적 생성이라 data-i18n으로 못 잡으므로 값은 유지한 채 라벨만 갱신
+  document.querySelectorAll<HTMLOptionElement>('#setting-theme option').forEach((opt) => {
+    opt.textContent = themeLabel(opt.value);
+  });
+});
 
 // ── 사이드바 토글 ──
 
@@ -125,12 +153,13 @@ async function initSettings(): Promise<void> {
 
   const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement | null;
   if (themeSelect) {
-    // 동적으로 모든 테마 옵션을 채운다
+    // 동적으로 모든 테마 옵션을 채운다. dark/light/sakura/monokai/nord/solarized처럼
+    // 번역이 등록된 것만 지역화하고, 나머지(dracula, kanagawa 등)는 고유명사라 그대로 둔다.
     themeSelect.innerHTML = '';
     for (const name of getThemeNames()) {
       const opt = document.createElement('option');
       opt.value = name;
-      opt.textContent = name;
+      opt.textContent = themeLabel(name);
       themeSelect.appendChild(opt);
     }
     themeSelect.value = state.settings?.theme || 'dark';
@@ -323,6 +352,7 @@ async function init(): Promise<void> {
   initAgentListeners();
 
   await initSettings();
+  applyI18n();
 
   const restored = await restoreSession();
 

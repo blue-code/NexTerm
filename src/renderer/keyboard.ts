@@ -22,6 +22,7 @@ import { toggleTerminalSearch } from './search';
 import { showCommandPalette } from './command-palette';
 
 import { fitAllTerminals } from './terminal';
+import { t } from '../shared/i18n';
 
 let toggleSidebarHandler: (() => void) | null = null;
 
@@ -168,20 +169,20 @@ export function shouldInterceptKey(e: KeyboardEvent): boolean {
 /** 현재 바인딩 목록 반환 (설정 UI용) */
 export function getCurrentBindings(): Array<{ actionId: string; keys: string; label: string }> {
   const actionLabels: Record<string, string> = {
-    'command-palette': '커맨드 팔레트',
-    'new-workspace': '새 워크스페이스',
-    'close-panel': '패널 닫기',
-    'close-workspace': '워크스페이스 닫기',
-    'split-horizontal': '수평 분할',
-    'split-vertical': '수직 분할',
-    'toggle-sidebar': '사이드바 토글',
-    'open-browser': '브라우저 열기',
-    'terminal-search': '터미널 검색',
-    'next-workspace': '다음 워크스페이스',
-    'prev-workspace': '이전 워크스페이스',
-    'focus-next': '다음 패널',
-    'focus-prev': '이전 패널',
-    'restore-tab': '닫은 탭 복원',
+    'command-palette': t('shortcuts.command_palette'),
+    'new-workspace': t('cmd.new_workspace'),
+    'close-panel': t('cmd.close_panel'),
+    'close-workspace': t('cmd.close_workspace'),
+    'split-horizontal': t('cmd.split_h'),
+    'split-vertical': t('cmd.split_v'),
+    'toggle-sidebar': t('cmd.toggle_sidebar'),
+    'open-browser': t('cmd.open_browser'),
+    'terminal-search': t('cmd.terminal_search'),
+    'next-workspace': t('cmd.next_workspace'),
+    'prev-workspace': t('cmd.prev_workspace'),
+    'focus-next': t('cmd.focus_next'),
+    'focus-prev': t('cmd.focus_prev'),
+    'restore-tab': t('cmd.restore_tab'),
   };
 
   const result: Array<{ actionId: string; keys: string; label: string }> = [];

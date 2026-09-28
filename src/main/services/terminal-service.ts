@@ -9,6 +9,7 @@ import * as path from 'path';
 import { exec, execSync } from 'child_process';
 import { app } from 'electron';
 import { createLogger } from './logger';
+import { t } from '../../shared/i18n';
 
 const log = createLogger('TerminalService');
 
@@ -416,7 +417,7 @@ export class TerminalService {
         '  $sh=if($Shell){$Shell.Replace($bs,"$bs$bs")}else{""};',
         "  $body='{\"id\":\"1\",\"method\":\"new-split\",\"params\":{\"cwd\":\"'+$cwd+'\",\"shell\":\"'+$sh+'\"}}';",
         "  $pipe=[System.IO.Pipes.NamedPipeClientStream]::new('.','nexterm-ipc','InOut');",
-        "  try{$pipe.Connect(2000)}catch{Write-Host 'NexTerm 파이프 연결 실패';return};",
+        `  try{$pipe.Connect(2000)}catch{Write-Host '${t('terminal.pipe_failed')}';return};`,
         '  $w=[System.IO.StreamWriter]::new($pipe);',
         '  $w.WriteLine($body);$w.Flush();',
         '  Start-Sleep -Milliseconds 200;',

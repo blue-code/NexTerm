@@ -7,6 +7,7 @@ import { generateId } from './utils';
 import { splitNodeAt, removeNodeFrom, type SplitNode } from './layout';
 import { destroyTerminal } from './terminal';
 import { requestSessionSave } from './session';
+import { t } from '../shared/i18n';
 import type { PanelState } from '../shared/types';
 
 // IPC 리스너 해제 함수
@@ -19,8 +20,8 @@ export function createWorkspace(name?: string, cwd?: string): RuntimeWorkspace {
   const panelId = generateId();
   const workspace: RuntimeWorkspace = {
     id,
-    name: name || `워크스페이스 ${state.workspaces.length + 1}`,
-    panels: [{ id: panelId, type: 'terminal', title: '터미널', cwd: cwd || '' }],
+    name: name || `${t('workspace.default_name')} ${state.workspaces.length + 1}`,
+    panels: [{ id: panelId, type: 'terminal', title: t('panel.terminal'), cwd: cwd || '' }],
     splitLayout: { type: 'leaf', panelId } as SplitNode,
     activePanelId: panelId,
     cwd: cwd || electronAPI.env.USERPROFILE,
@@ -107,7 +108,7 @@ export function splitPanel(
   const newPanel: PanelState = {
     id: newPanelId,
     type: 'terminal',
-    title: '터미널',
+    title: t('panel.terminal'),
     cwd: opts.cwd || targetPanel?.cwd || ws.cwd,
     shell: opts.shell || undefined,
     initialCommand: opts.initialCommand || undefined,
@@ -169,7 +170,7 @@ export function openBrowserPanel(url?: string): void {
   const panel: PanelState = {
     id: panelId,
     type: 'browser',
-    title: '브라우저',
+    title: t('panel.browser'),
     url: url || 'https://www.google.com',
   };
   ws.panels.push(panel);
@@ -272,7 +273,7 @@ export function initChildDetectListener(): void {
     const newPanel: PanelState = {
       id: newPanelId,
       type: 'terminal',
-      title: '터미널',
+      title: t('panel.terminal'),
       cwd: activePanel?.cwd || ws.cwd,
       shellCommand: commandLine,
     };

@@ -10,6 +10,7 @@ import {
 } from './terminal';
 import { closePanel, splitPanel, togglePanelZoom } from './workspace';
 import { toggleTerminalSearch } from './search';
+import { t } from '../shared/i18n';
 import type { PanelState } from '../shared/types';
 
 interface MenuItem {
@@ -147,7 +148,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
 
   return [
     {
-      label: '복사',
+      label: t('ctx.copy'),
       shortcut: 'Ctrl+Shift+C',
       disabled: !selectedText,
       action: () => {
@@ -156,7 +157,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '붙여넣기',
+      label: t('ctx.paste'),
       shortcut: 'Ctrl+V',
       action: () => {
         pasteFromClipboardToPanel(panel.id);
@@ -165,7 +166,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '선택 영역 입력으로 전송',
+      label: t('ctx.send_selection'),
       disabled: !selectedText,
       action: () => {
         pasteTextToPanel(panel.id, selectedText);
@@ -174,7 +175,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '모두 선택',
+      label: t('ctx.select_all'),
       shortcut: 'Ctrl+A',
       action: () => {
         inst?.terminal.selectAll();
@@ -182,7 +183,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '화면 지우기',
+      label: t('ctx.clear_screen'),
       shortcut: 'Ctrl+L',
       action: () => {
         inst?.terminal.clear();
@@ -191,18 +192,18 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '검색',
+      label: t('panel.search'),
       shortcut: 'Ctrl+F',
       action: () => toggleTerminalSearch(panel.id),
     },
     {
-      label: zoomed ? '패널 축소' : '패널 확장',
+      label: zoomed ? t('ctx.zoom_out') : t('ctx.zoom_in'),
       shortcut: 'Ctrl+Shift+Z',
       action: () => togglePanelZoom(),
     },
     { label: '', separator: true },
     {
-      label: '수평 분할',
+      label: t('panel.split_h'),
       shortcut: 'Ctrl+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -210,7 +211,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '수직 분할',
+      label: t('panel.split_v'),
       shortcut: 'Ctrl+Shift+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -219,7 +220,7 @@ function buildTerminalMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '닫기',
+      label: t('panel.close'),
       shortcut: 'Ctrl+W',
       action: () => closePanel(panel.id),
     },
@@ -231,21 +232,21 @@ function buildBrowserMenu(panel: PanelState): MenuItem[] {
 
   return [
     {
-      label: '뒤로',
+      label: t('browser.back'),
       action: () => {
         const wv = findWebviewIn(panel.id);
         wv?.goBack();
       },
     },
     {
-      label: '앞으로',
+      label: t('browser.forward'),
       action: () => {
         const wv = findWebviewIn(panel.id);
         wv?.goForward();
       },
     },
     {
-      label: '새로고침',
+      label: t('browser.reload'),
       action: () => {
         const wv = findWebviewIn(panel.id);
         wv?.reload();
@@ -253,12 +254,12 @@ function buildBrowserMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: zoomed ? '패널 축소' : '패널 확장',
+      label: zoomed ? t('ctx.zoom_out') : t('ctx.zoom_in'),
       shortcut: 'Ctrl+Shift+Z',
       action: () => togglePanelZoom(),
     },
     {
-      label: '개발자 도구',
+      label: t('browser.devtools'),
       action: () => {
         const wv = findWebviewIn(panel.id);
         wv?.openDevTools();
@@ -266,7 +267,7 @@ function buildBrowserMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '수평 분할',
+      label: t('panel.split_h'),
       shortcut: 'Ctrl+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -274,7 +275,7 @@ function buildBrowserMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '수직 분할',
+      label: t('panel.split_v'),
       shortcut: 'Ctrl+Shift+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -283,7 +284,7 @@ function buildBrowserMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '닫기',
+      label: t('panel.close'),
       shortcut: 'Ctrl+W',
       action: () => closePanel(panel.id),
     },
@@ -294,13 +295,13 @@ function buildMarkdownMenu(panel: PanelState): MenuItem[] {
   const zoomed = state.zoomedPanelId === panel.id;
   return [
     {
-      label: zoomed ? '패널 축소' : '패널 확장',
+      label: zoomed ? t('ctx.zoom_out') : t('ctx.zoom_in'),
       shortcut: 'Ctrl+Shift+Z',
       action: () => togglePanelZoom(),
     },
     { label: '', separator: true },
     {
-      label: '수평 분할',
+      label: t('panel.split_h'),
       shortcut: 'Ctrl+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -308,7 +309,7 @@ function buildMarkdownMenu(panel: PanelState): MenuItem[] {
       },
     },
     {
-      label: '수직 분할',
+      label: t('panel.split_v'),
       shortcut: 'Ctrl+Shift+D',
       action: () => {
         state.focusedPanelId = panel.id;
@@ -317,7 +318,7 @@ function buildMarkdownMenu(panel: PanelState): MenuItem[] {
     },
     { label: '', separator: true },
     {
-      label: '닫기',
+      label: t('panel.close'),
       shortcut: 'Ctrl+W',
       action: () => closePanel(panel.id),
     },

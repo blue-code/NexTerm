@@ -12,6 +12,7 @@ import { decideClipboardKey, resolvePasteText } from './copy-paste';
 import { createLogger } from './logger';
 import { consumeInputForHistory, dropPanelBuffer, markPastedInput } from './command-history';
 import { handleKeyAgainstPending, dropPendingInput } from './pending-input';
+import { t } from '../shared/i18n';
 import type { PanelState } from '../shared/types';
 
 const log = createLogger('terminal');
@@ -344,7 +345,7 @@ function updatePanelCwd(panelId: string, title: string): void {
   if (!pane) return;
   const titleText = pane.querySelector('.panel-title-text');
   if (titleText) {
-    titleText.textContent = `터미널: ${folderName}`;
+    titleText.textContent = `${t('panel.terminal')}: ${folderName}`;
   }
 }
 
@@ -408,7 +409,7 @@ export function initTerminalIpcListeners(): void {
     const { id, exitCode } = payload as { id: string; exitCode: number };
     const instance = state.terminalInstances.get(id);
     if (instance) {
-      instance.terminal.writeln(`\r\n\x1b[90m[프로세스 종료, 코드: ${exitCode}]\x1b[0m`);
+      instance.terminal.writeln(`\r\n\x1b[90m[${t('terminal.process_exit')} ${exitCode}]\x1b[0m`);
     }
   });
   ipcCleanups.push(removeClose);
