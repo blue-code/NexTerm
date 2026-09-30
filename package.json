@@ -14,6 +14,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "npm run build && electron-builder --win",
+    "dist:store": "npm run build && electron-builder --win appx",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:all": "npm run build && electron-builder --win --mac",
     "test": "vitest run",
@@ -77,6 +78,20 @@
       "artifactName": "NexTerm-${version}-Setup.${ext}",
       "signDlls": false,
       "sign": null
+    },
+    "appx": {
+      "applicationId": "NexTerm",
+      "identityName": "3067F945.NexTerm",
+      "publisher": "CN=6A813624-B2E1-4883-B336-B24D70A7BB09",
+      "publisherDisplayName": "수카버스",
+      "displayName": "NexTerm",
+      "backgroundColor": "#1a1b26",
+      "languages": [
+        "ko-KR",
+        "en-US",
+        "ja-JP",
+        "zh-CN"
+      ]
     },
     "nsis": {
       "oneClick": false,

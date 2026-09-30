@@ -329,6 +329,24 @@ function renderPanel(panel: PanelState): HTMLElement {
   return pane;
 }
 
+/** CLI(nt browser-*) 및 렌더러 내부에서 공유하는 webview 엘리먼트 타입 */
+export type BrowserWebviewEl = HTMLElement & {
+  src: string;
+  goBack(): void;
+  goForward(): void;
+  reload(): void;
+  getTitle(): string;
+  openDevTools(): void;
+  findInPage(text: string, opts?: { forward?: boolean }): void;
+  stopFindInPage(action: string): void;
+};
+
+/** panelId로 현재 렌더링된 브라우저 webview 엘리먼트를 찾는다 (CLI 원격 제어용). */
+export function getBrowserWebviewElement(panelId: string): BrowserWebviewEl | null {
+  const pane = document.querySelector(`[data-panel-id="${CSS.escape(panelId)}"]`);
+  return (pane?.querySelector('.browser-webview') as BrowserWebviewEl | null) ?? null;
+}
+
 function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
   const browserPanel = document.createElement('div');
   browserPanel.className = 'browser-panel';
@@ -347,16 +365,7 @@ function renderBrowserContent(pane: HTMLElement, panel: PanelState): void {
   toolbar.appendChild(navBtns);
 
   // Omnibar (히스토리 자동완성 + 검색엔진 통합)
-  const webview = document.createElement('webview') as HTMLElement & {
-    src: string;
-    goBack(): void;
-    goForward(): void;
-    reload(): void;
-    getTitle(): string;
-    openDevTools(): void;
-    findInPage(text: string, opts?: { forward?: boolean }): void;
-    stopFindInPage(action: string): void;
-  };
+  const webview = document.createElement('webview') as BrowserWebviewEl;
 
   const omnibar = createOmnibar(toolbar, panel.url || '', (url) => {
     webview.src = url;

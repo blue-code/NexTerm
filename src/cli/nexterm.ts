@@ -8,6 +8,10 @@
  *   nexterm rename-workspace --id ID --name NAME
  *   nexterm new-split [--direction horizontal|vertical]
  *   nexterm open-browser [--url URL]
+ *   nexterm browser-navigate --url URL [--panel-id ID]
+ *   nexterm browser-back [--panel-id ID]
+ *   nexterm browser-forward [--panel-id ID]
+ *   nexterm browser-reload [--panel-id ID]
  *   nexterm notify --title TITLE [--body BODY]
  *   nexterm send --panel-id ID --text TEXT
  *   nexterm focus-window
@@ -110,6 +114,19 @@ NexTerm CLI - AI 코딩 에이전트를 위한 터미널 멀티플렉서
 
   open-browser         브라우저 패널 열기
     --url URL            이동할 URL
+
+  browser-navigate     열려 있는 브라우저 패널을 다른 URL로 이동
+    --url URL            이동할 URL
+    --panel-id ID        대상 패널 ID (생략 시 포커스된 패널)
+
+  browser-back         브라우저 패널 뒤로가기
+    --panel-id ID        대상 패널 ID (생략 시 포커스된 패널)
+
+  browser-forward      브라우저 패널 앞으로가기
+    --panel-id ID        대상 패널 ID (생략 시 포커스된 패널)
+
+  browser-reload       브라우저 패널 새로고침
+    --panel-id ID        대상 패널 ID (생략 시 포커스된 패널)
 
   notify               알림 보내기
     --title TITLE        알림 제목

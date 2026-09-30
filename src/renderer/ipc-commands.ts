@@ -8,9 +8,12 @@ import {
   renameWorkspace,
   splitPanel,
   openBrowserPanel,
+  getActiveWorkspace,
 } from './workspace';
 import { pasteTextToPanel } from './terminal';
 import { setPendingInput } from './pending-input';
+import { getBrowserWebviewElement } from './render';
+import { resolveTargetPanelId, resolveBrowserPanelId } from './ipc-panel-target';
 import type { IpcCommandPayload } from '../shared/types';
 
 let removeIpcCommand: (() => void) | null = null;
@@ -38,6 +41,36 @@ export function initIpcCommands(): void {
       case 'open-browser':
         openBrowserPanel(params?.url as string | undefined);
         break;
+
+      // 기존에 열려 있는 브라우저 패널을 대상으로 한 원격 제어.
+      // --panel-id 생략 시: 포커스된 패널이 브라우저면 그것을, 아니면 현재
+      // 워크스페이스에 브라우저 패널이 정확히 하나뿐이면 그것을 대상으로 한다.
+      case 'browser-navigate': {
+        const url = params?.url as string | undefined;
+        const targetId = resolveBrowserPanelId(params, state.focusedPanelId, getActiveWorkspace()?.panels || []);
+        if (!url || !targetId) break;
+        const webview = getBrowserWebviewElement(targetId);
+        if (webview) webview.src = url;
+        break;
+      }
+      case 'browser-back': {
+        const targetId = resolveBrowserPanelId(params, state.focusedPanelId, getActiveWorkspace()?.panels || []);
+        if (!targetId) break;
+        getBrowserWebviewElement(targetId)?.goBack();
+        break;
+      }
+      case 'browser-forward': {
+        const targetId = resolveBrowserPanelId(params, state.focusedPanelId, getActiveWorkspace()?.panels || []);
+        if (!targetId) break;
+        getBrowserWebviewElement(targetId)?.goForward();
+        break;
+      }
+      case 'browser-reload': {
+        const targetId = resolveBrowserPanelId(params, state.focusedPanelId, getActiveWorkspace()?.panels || []);
+        if (!targetId) break;
+        getBrowserWebviewElement(targetId)?.reload();
+        break;
+      }
       case 'send':
         if (params?.panelId && params?.text) {
           const instance = state.terminalInstances.get(params.panelId as string);

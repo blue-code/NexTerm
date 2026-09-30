@@ -60,7 +60,15 @@ npm run test:watch     # Vitest 감시 모드
 
 ### CLI 제어 (Named Pipe)
 
-`\\.\pipe\nexterm-ipc`로 외부 CLI에서 JSON-RPC 메시지 전송. `nt` 명령어(PowerShell 함수 / cmd.exe `nt.cmd`)로 새 패널 생성.
+`\\.\pipe\nexterm-ipc`로 외부 CLI에서 JSON-RPC 메시지 전송. PowerShell 셸에 주입되는 `nt` 함수(`src/main/services/terminal-service.ts`의 `buildShellArgs`)가 범용 클라이언트 역할을 한다.
+
+- `nt` / `nt <shell>` — 기존 단축 동작 유지: 현재 디렉터리에서 새 패널 분할(`new-split`)
+- `nt <method> [--flag value ...]` — 알려진 IPC 메서드명이면 그대로 JSON-RPC로 전달 (`--panel-id`처럼 kebab-case 플래그는 camelCase 파라미터로 자동 변환)
+  - 예: `nt open-browser --url https://...`, `nt browser-navigate --panel-id ID --url ...`, `nt browser-back`, `nt browser-forward`, `nt browser-reload`
+- 브라우저 패널 제어 계열(`browser-navigate`/`browser-back`/`browser-forward`/`browser-reload`)은 `--panel-id` 생략 시 포커스된 패널이 브라우저면 그것을, 아니면 현재 워크스페이스에 브라우저 패널이 정확히 하나뿐이면 그것을 대상으로 한다 (`src/renderer/ipc-panel-target.ts`의 `resolveBrowserPanelId`).
+- cmd.exe용 `nt.cmd`는 하위 호환용 `new-split` 단축 동작만 지원한다 (생성 로직 동일 파일).
+- 실제 라우팅은 렌더러의 `src/renderer/ipc-commands.ts`에서 처리하며, `open-browser`를 제외한 미지원 메서드는 `main.ts`가 조용히 무시한다.
+- (참고) `src/cli/nexterm.ts`는 Node 기반의 더 완전한 CLI 초안이지만 빌드/배포 파이프라인에 연결되어 있지 않다 — 실사용자에게 배포되는 것은 위 PowerShell `nt` 함수뿐이다.
 
 ## 핵심 파일
 

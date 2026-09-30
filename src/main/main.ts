@@ -548,7 +548,7 @@ function setupPipeServer(): void {
             const pPrefix = pIsLast ? '└─' : '├─';
             const icon = p.type === 'terminal' ? '▸' : p.type === 'browser' ? '◎' : '¶';
             const detail = p.type === 'terminal' ? (p.cwd || '') : (p.url || p.filePath || '');
-            lines.push(`${branch}${pPrefix} ${icon} ${p.type} ${detail}`);
+            lines.push(`${branch}${pPrefix} ${icon} ${p.type} ${detail} (${p.id})`);
           }
         }
         return { tree: lines.join('\n') };
@@ -565,10 +565,12 @@ function setupPipeServer(): void {
 // 배포 파이프라인은 electron-builder로 로컬 빌드 후 `gh release create`로 수동 업로드하며,
 // 이때 electron-builder가 함께 만든 latest.yml/블록맵도 반드시 같이 올려야 이 기능이 동작한다.
 // 개발 실행(app.isPackaged=false)에서는 갱신 피드가 없어 스킵한다.
+// MS 스토어(MSIX) 설치본은 업데이트를 스토어가 전담하고, 앱 패키지 위치도 읽기 전용이라
+// 이 자체 업데이트 확인은 아무 효과 없이 실패만 반복하므로 process.windowsStore로 건너뛴다.
 const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4시간
 
 function setupAutoUpdater(): void {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || process.windowsStore) return;
 
   autoUpdater.logger = {
     info: (msg: unknown) => log.info(String(msg)),

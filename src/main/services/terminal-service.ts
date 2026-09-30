@@ -408,14 +408,35 @@ export class TerminalService {
         '}',
       ].join(' ');
 
-      // nt (new terminal): Named Pipe로 NexTerm에 새 터미널 패널 생성 요청
-      // [char]92 = 백슬래시, JSON 이스케이프용
+      // nt: Named Pipe로 NexTerm을 원격 제어하는 범용 명령.
+      // - 인자가 알려진 IPC 메서드명이면: nt <method> [--flag value ...] 로 그대로 JSON-RPC 전달
+      //   (예: nt open-browser --url https://... , nt browser-navigate --panel-id ID --url ...)
+      // - 그 외(빈 인자 또는 셸 이름): 기존 동작 유지 — 현재 디렉터리에서 새 패널 분할(new-split)
       const ntFn = [
-        'function nt([string]$Shell) {',
-        '  $bs=[char]92;',
-        '  $cwd=(Get-Location).Path.Replace($bs,"$bs$bs");',
-        '  $sh=if($Shell){$Shell.Replace($bs,"$bs$bs")}else{""};',
-        "  $body='{\"id\":\"1\",\"method\":\"new-split\",\"params\":{\"cwd\":\"'+$cwd+'\",\"shell\":\"'+$sh+'\"}}';",
+        'function nt {',
+        '  param([Parameter(Position=0)][string]$Arg0,[Parameter(ValueFromRemainingArguments=$true)][string[]]$Rest);',
+        "  $known=@('new-workspace','select-workspace','rename-workspace','new-split','open-browser','browser-navigate','browser-back','browser-forward','browser-reload','notify','send','send-input','focus-window','tree');",
+        '  $params=@{};',
+        '  if($Arg0 -and ($known -contains $Arg0)){',
+        '    $method=$Arg0;',
+        '    $i=0;',
+        '    while($i -lt $Rest.Count){',
+        '      $a=$Rest[$i];',
+        "      if($a.StartsWith('--')){",
+        '        $raw=$a.Substring(2);',
+        "        $parts=$raw -split '-';",
+        '        $key=$parts[0];',
+        '        for($j=1;$j -lt $parts.Count;$j++){$key+=$parts[$j].Substring(0,1).ToUpper()+$parts[$j].Substring(1)};',
+        "        if((($i+1) -lt $Rest.Count) -and (-not $Rest[$i+1].StartsWith('--'))){$params[$key]=$Rest[$i+1];$i+=2}",
+        '        else{$params[$key]=$true;$i+=1}',
+        '      } else { $i+=1 }',
+        '    }',
+        '  } else {',
+        "    $method='new-split';",
+        '    $params.cwd=(Get-Location).Path;',
+        '    if($Arg0){$params.shell=$Arg0}',
+        '  };',
+        "  $body=(@{id='1';method=$method;params=$params} | ConvertTo-Json -Compress -Depth 6);",
         "  $pipe=[System.IO.Pipes.NamedPipeClientStream]::new('.','nexterm-ipc','InOut');",
         `  try{$pipe.Connect(2000)}catch{Write-Host '${t('terminal.pipe_failed')}';return};`,
         '  $w=[System.IO.StreamWriter]::new($pipe);',
